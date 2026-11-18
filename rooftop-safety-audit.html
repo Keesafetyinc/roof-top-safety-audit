@@ -1,0 +1,546 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Rooftop Safety Audit</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;600;700;800&display=swap">
+<style>
+html,body{margin:0}
+[hidden]{display:none!important}
+img{max-width:100%}
+/* Layout: built from keesafety.com's own parts — white page, square corners, grey tiles, slate cards,
+   yellow-led hairline rule as the progress bar, site-style tabs. Questions left, a roof plan right that
+   flags each area as hazards are found. Single light theme on purpose: it sits inside the white site page. */
+:root{
+  --blue:#1E22AA; --blue-dark:#171A85; --yellow:#FFCD00; --slate:#333F48;
+  --ink:#000000; --text:#333333; --muted:#666666; --line:#BBBBBB; --hair:#DDDDDD;
+  --tile:#F5F5F6; --band:#EEEEEE; --page:#FFFFFF;
+  --red:#CC2A24; --red-bright:#FF3520; --green:#219653;
+  --font:"Open Sans","Segoe UI",Helvetica,Arial,sans-serif;
+}
+*{box-sizing:border-box}
+body{background:var(--page);color:var(--text);font-family:var(--font);font-size:15px;line-height:1.6}
+.wrap{max-width:1120px;margin:0 auto;padding-block:28px 56px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+button{font:inherit;cursor:pointer}
+a{color:var(--blue)}
+:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+
+/* Optional brand bar for standalone use (campaign links). Turn off when embedded under the site header. */
+.brandbar{background:var(--blue);color:#fff}
+.brandbar .in{max-width:1120px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;gap:16px;padding-block:14px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.boxlogo{width:52px;height:52px;border:3px solid #fff;display:flex;flex-direction:column;justify-content:center;padding-left:5px;font-weight:800;font-size:11px;line-height:1.08;letter-spacing:-.02em;flex:none}
+.brandbar .tel{font-weight:700;font-size:14px;white-space:nowrap}
+.brandbar :focus-visible{outline-color:#fff}
+
+/* Head */
+.head{display:flex;justify-content:space-between;align-items:flex-end;gap:16px 32px;flex-wrap:wrap}
+h1{font-size:clamp(26px,4vw,33px);line-height:1.2;font-weight:700;letter-spacing:-1px;color:var(--ink);margin:0 0 6px;text-wrap:balance}
+.head p{margin:0;max-width:60ch}
+h2{font-size:20px;line-height:1.3;font-weight:700;color:var(--ink);margin:0 0 4px;text-wrap:balance}
+.sub{margin:0 0 22px;color:var(--text);max-width:58ch}
+
+.tlink{background:none;border:0;padding:0;color:var(--blue);font-weight:600;font-size:14px;text-decoration:none;display:inline-flex;gap:8px;align-items:baseline;white-space:nowrap}
+.tlink span{border-bottom:1px solid var(--blue);padding-bottom:1px}
+.tlink:hover span{border-bottom-width:2px;padding-bottom:0}
+.tlink.wrapok{white-space:normal;display:inline}
+.tlink.wrapok i{margin-left:8px}
+
+/* Progress: the site's divider — grey hairline with a yellow lead */
+.rule{position:relative;height:3px;margin-top:22px}
+.rule::before{content:"";position:absolute;left:0;right:0;bottom:0;height:1px;background:var(--line)}
+.rule i{position:absolute;left:0;bottom:0;height:3px;background:var(--yellow);min-width:48px;transition:width .3s}
+.count{font-size:13px;color:var(--muted);margin:6px 0 0;font-variant-numeric:tabular-nums}
+
+/* Tabs, as on the site's product rows */
+.tabs{display:flex;gap:6px 30px;border-bottom:1px solid var(--line);margin:14px 0 30px;overflow-x:auto}
+.tabs button{background:none;border:0;border-bottom:2px solid transparent;margin-bottom:-1px;padding:12px 0;color:var(--blue);font-weight:700;font-size:13.5px;white-space:nowrap}
+.tabs button[aria-current]{border-bottom-color:var(--blue)}
+.tabs button .ck{display:inline-block;width:14px;margin-right:4px;color:var(--green)}
+
+/* Two columns */
+.cols{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,400px);gap:40px;align-items:start}
+.side{position:sticky;top:calc(env(safe-area-inset-top,0px) + 16px);background:var(--tile);padding:20px}
+.side h3{font-size:13.5px;font-weight:700;color:var(--ink);margin:0 0 10px}
+.side p{font-size:13px;margin:10px 0 0;color:var(--text)}
+@media (max-width:860px){
+  .cols{grid-template-columns:minmax(0,1fr);gap:24px}
+  .side{position:static}
+  .cols.asking .side{display:none}
+}
+
+/* Roof plan */
+.plan{display:block;width:100%;height:auto}
+.plan .surface{fill:#fff}
+.plan .z{--zf:#fff;--zs:var(--slate);--zd:var(--slate);--zw:1.5;cursor:pointer}
+.plan .z .s{fill:var(--zf);stroke:var(--zs);stroke-width:var(--zw)}
+.plan .z .d{fill:none;stroke:var(--zd);stroke-width:1.2}
+.plan .z .l{fill:none;stroke:var(--zs);stroke-width:2}
+.plan .z text{font-family:var(--font);font-size:9.5px;font-weight:700;letter-spacing:.08em;fill:var(--muted)}
+.plan .z.flag{--zf:var(--yellow)}
+.plan .z.urgent{--zf:var(--red);--zd:#fff}
+.plan .z.active{--zs:var(--blue);--zw:3}
+.plan .z.active text{fill:var(--blue)}
+.plan .z.static{cursor:default}
+.plan .dash{fill:none;stroke:var(--muted);stroke-width:1;stroke-dasharray:5 4}
+.key{display:flex;flex-wrap:wrap;gap:6px 18px;font-size:12.5px;color:var(--text);margin-top:12px}
+.key span{display:inline-flex;align-items:center;gap:6px}
+.sq{width:11px;height:11px;display:inline-block;border:1px solid var(--slate);background:#fff;flex:none}
+.sq.flag{background:var(--yellow)}
+.sq.urgent{background:var(--red);border-color:var(--red)}
+
+/* Questions */
+.q{padding-block:18px;border-top:1px solid var(--hair)}
+.q:first-of-type{border-top:0;padding-top:0}
+.q-t{font-size:16px;line-height:1.45;font-weight:600;color:var(--ink);margin:0 0 4px;max-width:56ch;text-wrap:pretty}
+.q-n{font-size:13.5px;color:var(--muted);margin:0;max-width:60ch}
+.opts{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+.opt{background:#fff;color:var(--text);border:1px solid var(--line);padding:10px 20px;min-width:88px;font-weight:600;font-size:14px}
+.opt:hover{border-color:var(--blue);color:var(--blue)}
+.opt[aria-pressed="true"]{background:var(--blue);border-color:var(--blue);color:#fff}
+.need{display:none;color:var(--red);font-size:13px;font-weight:600;margin:8px 0 0}
+.q.miss .need{display:block}
+
+.nav{display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap;margin-top:14px;padding-top:22px;border-top:1px solid var(--hair)}
+.btn{border:0;padding:14px 26px;font-weight:700;font-size:14px;text-decoration:none;display:inline-block;text-align:center}
+.btn.blue{background:var(--blue);color:#fff}
+.btn.blue:hover{background:var(--blue-dark)}
+.btn.yellow{background:var(--yellow);color:var(--ink)}
+.btn.yellow:hover{background:#F2C300}
+.btn[disabled]{opacity:.6;cursor:wait}
+
+/* Contact form */
+.form{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px 20px}
+@media (max-width:560px){.form{grid-template-columns:minmax(0,1fr)}}
+.field label{display:block;font-weight:600;font-size:14px;color:var(--ink);margin-bottom:6px}
+.field label em{color:var(--red);font-style:normal}
+.field input{font:inherit;width:100%;padding:11px 12px;border:1px solid var(--line);border-radius:0;background:#fff;color:var(--ink)}
+.field input:focus{border-color:var(--blue);outline:1px solid var(--blue)}
+.field input[aria-invalid="true"]{border-color:var(--red)}
+.err{color:var(--red);font-size:13px;font-weight:600;min-height:20px}
+.fine{font-size:13px;color:var(--muted);margin:14px 0 0;max-width:60ch}
+
+/* Results */
+.notice{background:var(--yellow);color:var(--ink);font-weight:600;font-size:14px;padding:10px 16px;margin-bottom:20px}
+.verdict{background:var(--slate);color:#fff;padding:clamp(22px,4vw,34px);display:grid;grid-template-columns:minmax(0,1fr) minmax(0,340px);gap:24px 48px;align-items:end;margin-bottom:40px}
+@media (max-width:760px){.verdict{grid-template-columns:minmax(0,1fr)}}
+.verdict .lab{font-size:13.5px;font-weight:600;margin:0 0 2px;opacity:.85}
+.verdict .lvl{font-size:clamp(30px,5vw,40px);line-height:1.15;font-weight:700;letter-spacing:-1px;margin:0 0 10px}
+.verdict p{margin:0;max-width:52ch}
+.scale{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px}
+.scale i{display:block;height:14px;border:1px solid rgba(255,255,255,.55)}
+.scale span{display:block;font-size:12px;margin-top:6px;color:rgba(255,255,255,.7)}
+.scale .on i{background:var(--yellow);border-color:var(--yellow)}
+.scale.critical .on i{background:var(--red-bright);border-color:var(--red-bright)}
+.scale .cur span{color:#fff;font-weight:700}
+
+.rcols{display:grid;grid-template-columns:minmax(0,400px) minmax(0,1fr);gap:40px;align-items:start;margin-bottom:44px}
+@media (max-width:860px){.rcols{grid-template-columns:minmax(0,1fr);gap:24px}}
+.rcols .side{position:static}
+.areas{list-style:none;margin:0;padding:0}
+.areas li{display:flex;justify-content:space-between;align-items:baseline;gap:16px;padding:13px 0;border-bottom:1px solid var(--hair)}
+.areas li:first-child{border-top:1px solid var(--hair)}
+.areas b{color:var(--ink);font-weight:600;font-size:15px;display:inline-flex;align-items:center;gap:10px}
+.areas span{font-size:14px;white-space:nowrap;font-variant-numeric:tabular-nums}
+.areas .ok{color:var(--green);font-weight:600}
+
+.sec-rule{position:relative;height:3px;margin:10px 0 0}
+.sec-rule::before{content:"";position:absolute;left:0;right:0;bottom:0;height:1px;background:var(--line)}
+.sec-rule::after{content:"";position:absolute;left:0;bottom:0;width:120px;height:3px;background:var(--yellow)}
+.f{display:grid;grid-template-columns:120px minmax(0,1fr) minmax(0,280px);gap:8px 28px;padding:20px 0;border-bottom:1px solid var(--hair)}
+@media (max-width:760px){.f{grid-template-columns:minmax(0,1fr)}}
+.sev{font-size:13px;font-weight:700;color:var(--ink);display:inline-flex;align-items:center;gap:8px;align-self:start;padding-top:2px}
+.f h3{font-size:16px;font-weight:700;color:var(--ink);margin:0 0 4px}
+.f p{margin:0;max-width:60ch}
+.f .ref{font-size:13px;color:var(--muted);margin-top:6px}
+.f .fix small{display:block;font-size:13px;color:var(--muted);margin-bottom:2px}
+.clear{background:var(--tile);padding:20px;margin-top:20px}
+
+.cta{background:var(--blue);color:#fff;padding:clamp(22px,4vw,34px);margin-top:44px;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:20px 40px;align-items:center}
+@media (max-width:700px){.cta{grid-template-columns:minmax(0,1fr)}}
+.cta h2{color:#fff;margin:0 0 6px}
+.cta p{margin:0;max-width:56ch}
+.cta .tel{font-weight:700;white-space:nowrap}
+.cta :focus-visible{outline-color:#fff}
+.after{display:flex;flex-wrap:wrap;gap:12px 32px;margin-top:22px}
+.disc{font-size:13px;color:var(--muted);margin:22px 0 0;max-width:80ch}
+
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div class="brandbar" id="brandbar" hidden>
+  <div class="in">
+    <div class="boxlogo" aria-label="Kee Safety"><span>Kee</span><span>Safety</span></div>
+    <span class="tel">+1 (866) 533-2409</span>
+  </div>
+</div>
+<div class="wrap"><div id="app"></div></div>
+
+<script>
+/* ---------- Config ---------- */
+const SHOW_BRAND_BAR = false;  // false when embedded on a keesafety.com page that already has the site header
+const SUBMIT_URL = "https://keesafety-admin.com/2026/scripts/send_email.php"; // existing mailer; same field names as the old tool
+const SITE = "https://www.keesafety.com";
+
+/* Zoho CRM webform ("Rooftop Safety Audit", Leads module). Copy the two keys from the webform's
+   generated embed code. Tags (KeeSafetyContactUsWebForm + interactive_audit), Lead Source and the
+   assignment rule are set on the webform itself in Zoho, so they apply to every submission.
+   Field names: standard fields use their label; custom fields use the LEADCF name shown in the embed code. */
+const ZOHO = {
+  url: "https://crm.zoho.com/crm/WebToLeadForm",
+  xnQsjsdp: "58a1acb5214f228a0a210e5fa585fff4b8819c4ff3752c54c939d581eec7df9a",
+  xmIwtLD: "34ec4df6e51373c8bdccb11b03b8d54d393084fd6d64b7dfdaecef40623b11ea5255242aaefc05ab",
+  returnURL: "https://www.keesafety.com/services/interactive-rooftop-safety-audit-tool",
+  fields: {
+    first:"First Name", last:"Last Name", company:"Company", email:"Email", phone:"Phone",
+    zip:"Zip Code", description:"Description", source:"Lead Source",
+    interests:"LEADCF8", // Product Interests (multi-select)
+  },
+};
+const AREA_TO_INTEREST = {access:"Access Points", openings:"Rooftop Openings", edges:"Unprotected Edges", obstacles:"Obstacles on the Roof / Unsafe Walkways"};
+const P = {
+  gate:["Kee Gate® self-closing safety gate","/safety-gates/kee-gate"],
+  hatch:["Kee Hatch® railing","/roof-railings/kee-hatch"],
+  life:["Lifelines & anchors","/lifelines-anchors"],
+  cover:["Kee Cover® skylight screens","/skylight-fall-protection/kee-cover"],
+  dome:["Kee Dome® skylight railing","/skylight-fall-protection/kee-dome"],
+  guard:["Kee Guard® rooftop guardrail","/roof-railings/kee-guard"],
+  line:["Kee Line® horizontal lifeline","/lifelines-anchors/keeline"],
+  mark:["Kee Mark® warning line","/roof-railings/kee-mark-warning-line"],
+  walk:["Kee Walk® roof walkway","/platforms-walkways/kee-walk-rooftop-walkway"],
+  step:["Kee Step crossover","/platforms-walkways/kee-walk-stepover"],
+  platform:["Kee® static work platform","/platforms-walkways/kee-work-platforms"],
+  survey:["Hazard assessment survey","/services/safety-surveys"],
+};
+
+/* ---------- Questions ----------
+   pts: risk points per answer. finding: reported when the answer scores above 0.
+   show: follow-up only appears, and only counts, when this returns true. */
+const YN = [["yes","Yes"],["no","No"]];
+const FREQ = [["daily","Daily"],["weekly","Weekly"],["monthly","Monthly"],["rarely","Rarely"]];
+const SECTIONS = [
+ {id:"access", title:"Access points", sub:"Ladders, hatches and doorways onto the roof.", qs:[
+  {id:"access-frequency", t:"How often do workers go up onto the roof?", opts:FREQ, pts:{daily:2,weekly:1}},
+  {id:"ladder-gates", t:"Do ladder openings at the roof edge have a self-closing gate or an offset entry?", opts:YN, pts:{no:3},
+   f:{t:"Ladder openings have no self-closing gate", d:"Anyone stepping off the ladder walks straight onto an open edge. A self-closing gate shuts the gap after every use.", p:P.gate, ref:"OSHA 1910.28(b)(3)"}},
+  {id:"hatch-guards", t:"Are roof hatches and access doors guarded with railings or a gate?", opts:YN, pts:{no:3},
+   f:{t:"Roof hatches are unguarded", d:"An open hatch is a hole in the roof. A hatch railing keeps it protected while open and gives the climber a handhold.", p:P.hatch, ref:"OSHA 1910.28(b)(3)"}},
+  {id:"chains", t:"Are chains used across ladder openings instead of a gate?", n:"Chains are not an OSHA-compliant barrier.", opts:YN, pts:{yes:2},
+   f:{t:"Chains are used in place of gates", d:"Chains get left unhooked and do not meet the strength requirement for a barrier.", p:P.gate, ref:"OSHA 1910.29(b)"}},
+  {id:"ladder-safety", t:"Do fixed ladders over 24 feet have a ladder safety system or a cage?", opts:[["yes","Yes"],["no","No"],["na","No ladders over 24 ft"]], pts:{no:3},
+   f:{t:"Tall fixed ladders have no fall protection", d:"Fixed ladders over 24 feet need a ladder safety system or personal fall arrest. Cages alone no longer qualify on new ladders.", p:P.life, ref:"OSHA 1910.28(b)(9)"}},
+ ]},
+ {id:"openings", title:"Roof openings", sub:"Skylights, shafts and holes someone could step into or fall through.", qs:[
+  {id:"skylights", t:"Are there skylights, smoke vents, shafts or other openings on the roof?", opts:YN, pts:{yes:1}},
+  {id:"skylight-protection", t:"Is every opening protected by a guardrail, a skylight screen or a cover?", opts:YN, pts:{no:4}, show:a=>a.skylights==="yes",
+   f:{t:"Skylights and openings are unprotected", d:"A skylight is treated as a hole in the roof. Each one needs a screen, a cover or a guardrail around it.", p:P.cover, ref:"OSHA 1910.28(b)(3)(i)"}},
+  {id:"skylight-rating", t:"Are the skylights rated to hold a person, and inspected for wear?", n:"Plastic domes turn brittle in sunlight and stop holding weight.", opts:YN, pts:{no:2}, show:a=>a.skylights==="yes",
+   f:{t:"Skylights are not rated or inspected", d:"An unrated or aging dome cannot be trusted to hold a person. Treat it as an open hole until it is protected.", p:P.dome, ref:"OSHA 1910.28(b)(3)(i)"}},
+  {id:"skylight-load", t:"Can existing covers hold at least twice the weight they could be expected to carry?", opts:YN, pts:{no:2}, show:a=>a.skylights==="yes",
+   f:{t:"Covers may not meet the load requirement", d:"Covers must support at least twice the maximum load they may see, and be secured so they cannot shift.", p:P.cover, ref:"OSHA 1910.29(e)"}},
+  {id:"skylight-bars", t:"Are burglar bars under a skylight the only thing that would stop a fall?", n:"Burglar bars are not an OSHA-compliant fall protection solution.", opts:YN, pts:{yes:3}, show:a=>a.skylights==="yes",
+   f:{t:"Burglar bars are relied on to stop a fall", d:"Security bars are not designed or tested to catch a falling person. Add a rated screen or railing at roof level.", p:P.cover, ref:"OSHA 1910.28(b)(3)(i)"}},
+ ]},
+ {id:"edges", title:"Roof edges", sub:"The roof perimeter and how close work gets to it.", qs:[
+  {id:"edge-distance", t:"How close to the roof edge does work usually happen?", n:"Within 6 ft needs guardrails, travel restraint or fall arrest. From 6 to 15 ft, a designated area is allowed only for infrequent, temporary work.",
+   opts:[["under-6","Under 6 ft"],["6-15","6 to 15 ft"],["over-15","Over 15 ft"]], pts:{"under-6":3,"6-15":1}},
+  {id:"guardrails", t:"Is every open edge protected by a guardrail or a parapet at least 39 inches high?", opts:YN, pts:{no:4},
+   f:{t:"Open roof edges have no guardrail", d:"Guardrails protect everyone at the edge with no harness and no training. Freestanding systems install without penetrating the roof membrane.", p:P.guard, ref:"OSHA 1910.28(b)(1)"}},
+  {id:"fall-arrest", t:"Where there is no guardrail, do workers near the edge use fall arrest or travel restraint?", opts:YN, pts:{no:4}, show:a=>a.guardrails==="no",
+   f:{t:"No fall protection at unguarded edges", d:"With no guardrail and no harness system, nothing stops a fall. On most roofs this is the first thing to fix.", p:P.line, ref:"OSHA 1910.28(b)(1)"}},
+  {id:"edge-frequency", t:"How often does work happen near an unprotected edge?", opts:FREQ, pts:{daily:2,weekly:1}, show:a=>a.guardrails==="no"},
+  {id:"warning-lines", t:"On low-slope roofs, are work areas set off from the edge with warning lines?", opts:[["yes","Yes"],["no","No"],["na","Not a low-slope roof"]], pts:{no:2},
+   f:{t:"No warning lines on a low-slope roof", d:"A warning line shows workers where the safe area ends, 15 ft back from the edge.", p:P.mark, ref:"OSHA 1910.28(b)(13)"}},
+ ]},
+ {id:"obstacles", title:"Obstacles & walkways", sub:"Rooftop equipment, the path workers take to reach it, and what's in the way.", qs:[
+  {id:"obstacles", t:"Is there HVAC equipment, piping, ductwork or other plant on the roof that needs regular maintenance?", opts:YN, pts:{yes:1}},
+  {id:"walkway", t:"Is there a defined walkway, a common path, from the roof access point to the equipment?", n:"A set route keeps foot traffic away from edges and skylights and off the roof membrane.", opts:YN, pts:{no:2}, show:a=>a.obstacles==="yes",
+   f:{t:"No defined walkway to the equipment", d:"Without a common path, technicians pick their own route across the roof, over pipe runs and close to edges and skylights. A roof walkway sets the route and protects the membrane.", p:P.walk, ref:"OSHA 1910.22"}},
+  {id:"slip-resistant", t:"Is that walkway slip-resistant when wet or icy?", opts:YN, pts:{no:2}, show:a=>a.obstacles==="yes" && a.walkway==="yes",
+   f:{t:"The walkway is slippery when wet", d:"Roof membranes and bare metal get slick fast. Walkway panels with a slip-resistant grated surface keep footing in rain, frost and ice.", p:P.walk, ref:"OSHA 1910.22(a)"}},
+  {id:"pipe-crossings", t:"Do pipes, ducts or conduit cross the path workers walk?", opts:YN, pts:{yes:1}, show:a=>a.obstacles==="yes"},
+  {id:"crossovers", t:"Is there a crossover, a step-over with handrails, at every place they cross?", opts:YN, pts:{no:2}, show:a=>a.obstacles==="yes" && a["pipe-crossings"]==="yes",
+   f:{t:"Pipes and ducts block the walking path", d:"Workers step over or climb onto pipe and conduit to get past, a common cause of trips and falls that also damages the pipe. A crossover gives a safe step with handrails at each crossing.", p:P.step, ref:"OSHA 1910.22"}},
+  {id:"platform", t:"Do workers stand on equipment, curbs or step ladders to reach controls, filters or panels, or to get between roof levels?", opts:YN, pts:{yes:3}, show:a=>a.obstacles==="yes",
+   f:{t:"Workers climb onto equipment to reach it", d:"Standing on units, curbs or step ladders puts workers at height with nothing to hold. A work platform with guardrails, or stairs between roof levels, gives them a stable, guarded place to stand.", p:P.platform, ref:"OSHA 1910.22, 1910.28(b)(1)"}},
+  {id:"high-visibility", t:"Are trip hazards and low obstacles marked in high-visibility colors?", opts:YN, pts:{no:1}, show:a=>a.obstacles==="yes",
+   f:{t:"Obstacles are not marked", d:"High-visibility marking helps workers spot low pipe, conduit and curbs, especially in poor light.", p:P.survey, ref:"OSHA 1910.22"}},
+ ]},
+];
+const SAMPLE = {"access-frequency":"weekly","ladder-gates":"no","hatch-guards":"yes","chains":"yes","ladder-safety":"na",
+ "skylights":"yes","skylight-protection":"no","skylight-rating":"no","skylight-load":"yes","skylight-bars":"no",
+ "edge-distance":"under-6","guardrails":"no","fall-arrest":"yes","edge-frequency":"weekly","warning-lines":"no",
+ "obstacles":"yes","walkway":"yes","slip-resistant":"no","pipe-crossings":"yes","crossovers":"no","platform":"yes","high-visibility":"no"};
+
+/* ---------- State ---------- */
+const CONTACT = SECTIONS.length, RESULTS = SECTIONS.length + 1;
+let answers = {}, step = 0, contact = {}, sample = false, sendStatus = "", showMissing = false;
+try{ const s = JSON.parse(localStorage.getItem("ks-roof-audit") || "null"); if(s && s.answers) answers = s.answers; }catch(e){}
+const save = () => { try{ localStorage.setItem("ks-roof-audit", JSON.stringify({answers})) }catch(e){} };
+const visible = (q, a = answers) => !q.show || q.show(a);
+const shown = s => s.qs.filter(q => visible(q));
+const secDone = s => shown(s).every(q => answers[q.id]);
+
+/* ---------- Scoring ---------- */
+function score(a){
+  let total = 0, max = 0; const findings = [], summary = [];
+  SECTIONS.forEach(s => s.qs.forEach(q => {
+    if(!visible(q, a)) return;
+    max += Math.max(...Object.values(q.pts));
+    const p = q.pts[a[q.id]] || 0; total += p;
+    if(p > 0 && q.f) findings.push({...q.f, pts:p, sec:s.id, qid:q.id});
+    const lab = (q.opts.find(o => o[0] === a[q.id]) || [])[1];
+    if(lab) summary.push(q.t + " " + lab);
+  }));
+  const idx = max ? Math.round(total / max * 100) : 0;
+  let lvl = idx >= 60 ? 3 : idx >= 40 ? 2 : idx >= 20 ? 1 : 0;
+  // Working within 6 ft of an unguarded edge with no harness is critical whatever else is in place.
+  if(a["edge-distance"] === "under-6" && a.guardrails === "no" && a["fall-arrest"] === "no") lvl = 3;
+  findings.sort((x, y) => y.pts - x.pts);
+  return {idx, lvl, findings, summary};
+}
+const LEVELS = [
+ {key:"low", name:"Low risk", icon:"✅", text:"Your answers show few gaps. Keep inspecting gates, guardrails and skylights at least once a year so it stays that way."},
+ {key:"moderate", name:"Moderate risk", icon:"⚠️", text:"Most protection is in place, but each item below is a hazard a worker could meet on a routine visit."},
+ {key:"high", name:"High risk", icon:"⚠️", text:"Several hazards combine on this roof. Fix the urgent items before the next maintenance visit."},
+ {key:"critical", name:"Critical risk", icon:"🚨", text:"At least one hazard leaves workers with nothing between them and a fall. Restrict access to those areas until it is fixed."},
+];
+const sevOf = p => p >= 3 ? ["urgent","Urgent"] : p === 2 ? ["flag","Important"] : ["","Recommended"];
+const zoneOf = (r, id) => { const m = Math.max(0, ...r.findings.filter(f => f.sec === id).map(f => f.pts)); return m >= 3 ? "urgent" : m > 0 ? "flag" : ""; };
+
+/* ---------- Roof plan ----------
+   Each drawn item lights up from the specific answers that concern it, so a visitor
+   sees the exact pipe, walkway or unit that is the problem. */
+const ELEMENTS = {
+  edge:["guardrails","fall-arrest","warning-lines"], ladder:["ladder-gates","chains","ladder-safety"], hatch:["hatch-guards"],
+  skylights:["skylight-protection","skylight-rating","skylight-load","skylight-bars"],
+  walkway:["walkway","slip-resistant"], pipe:["crossovers","high-visibility"], rtu:["platform"],
+};
+const stateOf = (r, el) => { const m = Math.max(0, ...r.findings.filter(f => ELEMENTS[el].includes(f.qid)).map(f => f.pts)); return m >= 3 ? "urgent" : m > 0 ? "flag" : ""; };
+function plan(r, interactive){
+  const sec = { edge:"edges", ladder:"access", hatch:"access", skylights:"openings", walkway:"obstacles", pipe:"obstacles", rtu:"obstacles" };
+  const g = el => `class="z ${stateOf(r, el)} ${interactive && SECTIONS[step] && SECTIONS[step].id === sec[el] ? "active" : ""} ${interactive ? "" : "static"}" ${interactive ? `data-go="${SECTIONS.findIndex(s => s.id === sec[el])}"` : ""}`;
+  const sky = x => `<rect class="s" x="${x}" y="62" width="34" height="46"/><path class="d" d="M${x} 62l34 46M${x+34} 62l-34 46"/>`;
+  const rtu = (x, n) => `<rect class="s" x="${x}" y="146" width="44" height="44"/><circle class="d" cx="${x+22}" cy="168" r="13"/><text x="${x}" y="139">RTU-${n}</text>`;
+  const pipe = "M172 136V212H318V190M250 190V212";
+  return `<svg class="plan" viewBox="-18 0 418 280" role="img" aria-label="Roof plan showing the roof edge, ladder, hatch, skylights, walkway, pipe run and rooftop units">
+  <g ${g("edge")}>
+    <rect class="s" x="44" y="24" width="332" height="232"/>
+    <rect class="surface" x="52" y="32" width="316" height="216" stroke="var(--zs)" stroke-width="var(--zw)"/>
+    <rect class="dash" x="68" y="48" width="284" height="184"/>
+    <text x="262" y="244">6 FT FROM EDGE</text>
+  </g>
+  <g ${g("ladder")}>
+    <path class="l" d="M10 96H60M10 112H60M18 96v16M27 96v16M36 96v16"/>
+    <rect class="s" x="46" y="92" width="16" height="24"/>
+    <text x="-14" y="86">LADDER</text>
+  </g>
+  <g ${g("hatch")}>
+    <rect class="s" x="82" y="168" width="36" height="36"/><path class="d" d="M82 204l36-36"/>
+    <text x="82" y="217">HATCH</text>
+  </g>
+  <g ${g("skylights")}>
+    ${sky(150)}${sky(198)}${sky(246)}
+    <text x="150" y="121">SKYLIGHTS</text>
+  </g>
+  <g ${g("walkway")}>
+    <rect class="s" x="118" y="162" width="110" height="14"/>
+    <path class="d" d="M130 162v14M142 162v14M154 162v14M190 162v14M202 162v14M214 162v14"/>
+    <text x="124" y="189">WALKWAY</text>
+  </g>
+  <g ${g("pipe")}>
+    <path d="${pipe}" fill="none" stroke="var(--zs)" stroke-width="7"/>
+    <path d="${pipe}" fill="none" stroke="var(--zf)" stroke-width="4"/>
+    <rect class="s" x="163" y="156" width="18" height="26"/><path class="d" d="M163 165h18M163 173h18"/>
+    <text x="180" y="226">PIPE RUN</text>
+  </g>
+  <g ${g("rtu")}>${rtu(228, 1)}${rtu(296, 2)}</g>
+  </svg>`;
+}
+const KEY = `<div class="key"><span><i class="sq urgent"></i>Urgent hazard</span><span><i class="sq flag"></i>Hazard</span><span><i class="sq"></i>None flagged</span></div>`;
+
+/* ---------- Views ---------- */
+const $ = s => document.querySelector(s);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const arrow = `<i aria-hidden="true">→</i>`;
+
+function chrome(){
+  const all = SECTIONS.flatMap(shown), done = all.filter(q => answers[q.id]).length;
+  return `<div class="head"><div><h1>Rooftop Safety Audit</h1>
+    <p>Answer a few questions about your roof. We flag the fall hazards and show you how to fix each one.</p></div>
+    <button type="button" class="tlink" data-act="sample"><span>See a sample report</span>${arrow}</button></div>
+  <div class="rule" role="progressbar" aria-valuemin="0" aria-valuemax="${all.length}" aria-valuenow="${done}" aria-label="Questions answered"><i style="width:${done / all.length * 100}%"></i></div>
+  <p class="count">${done} of ${all.length} questions answered</p>
+  <div class="tabs" role="navigation" aria-label="Audit sections">${SECTIONS.map((s, i) =>
+    `<button type="button" data-go="${i}" ${i === step ? 'aria-current="step"' : ""}>${secDone(s) ? '<span class="ck" aria-label="Complete">✓</span>' : ""}${esc(s.title)}</button>`).join("")}
+    <button type="button" data-act="report" ${step === CONTACT ? 'aria-current="step"' : ""}>Your report</button></div>`;
+}
+
+function sectionView(){
+  const s = SECTIONS[step], r = score(answers), last = step === SECTIONS.length - 1;
+  return chrome() + `<div class="cols asking"><div>
+    <h2>${esc(s.title)}</h2><p class="sub">${esc(s.sub)}</p>
+    ${shown(s).map(q => `<div class="q ${showMissing && !answers[q.id] ? "miss" : ""}" id="q-${q.id}" role="group" aria-labelledby="t-${q.id}">
+      <p class="q-t" id="t-${q.id}">${esc(q.t)}</p>
+      ${q.n || q.f ? `<p class="q-n">${esc([q.n, q.f && q.f.ref].filter(Boolean).join(" "))}</p>` : ""}
+      <div class="opts">${q.opts.map(([v, l]) => `<button type="button" class="opt" id="o-${q.id}-${v}" data-q="${q.id}" data-v="${v}" aria-pressed="${answers[q.id] === v}">${esc(l)}</button>`).join("")}</div>
+      <p class="need">Choose an answer to continue.</p></div>`).join("")}
+    <div class="nav">${step > 0 ? `<button type="button" class="tlink" data-go="${step - 1}"><i aria-hidden="true">←</i><span>${esc(SECTIONS[step - 1].title)}</span></button>` : "<span></span>"}
+      <button type="button" class="btn ${last ? "yellow" : "blue"}" data-act="next">${last ? "Get my report" : "Next: " + esc(SECTIONS[step + 1].title)}</button></div>
+  </div>
+  <aside class="side"><h3>Your roof so far</h3>${plan(r, true)}${KEY}
+    <p>Areas fill in as hazards are found. Select an area to jump to its questions.</p></aside></div>`;
+}
+
+function contactView(){
+  const r = score(answers), n = r.findings.length, areas = new Set(r.findings.map(f => f.sec)).size;
+  const f = (id, l, type, req, extra) => `<div class="field"><label for="${id}">${l}${req ? " <em>*</em>" : ""}</label>
+    <input id="${id}" name="${id}" type="${type}" ${req ? "required" : ""} value="${esc(contact[id] || "")}" ${extra}><div class="err" id="e-${id}" role="alert"></div></div>`;
+  return chrome() + `<div class="cols"><div>
+    <h2>${n ? `We found ${n} hazard${n === 1 ? "" : "s"} in ${areas} of ${SECTIONS.length} areas` : "Your audit is ready"}</h2>
+    <p class="sub">Tell us where to send the report. Your results open on the next screen and a copy goes to your inbox.</p>
+    <form id="lead" novalidate><div class="form">
+      ${f("name", "Full name", "text", 1, 'autocomplete="name"')}
+      ${f("company", "Company", "text", 0, 'autocomplete="organization"')}
+      ${f("email", "Work email", "email", 1, 'autocomplete="email"')}
+      ${f("phone", "Phone", "tel", 0, 'autocomplete="tel"')}
+      ${f("zipcode", "ZIP code", "text", 1, 'inputmode="numeric" autocomplete="postal-code"')}
+    </div>
+    <div class="nav"><button type="button" class="tlink" data-go="${SECTIONS.length - 1}"><i aria-hidden="true">←</i><span>Back to questions</span></button>
+      <button type="submit" class="btn yellow" id="submit">Show my results</button></div></form>
+    <p class="fine">We use your details to send this report and to follow up about it. A Kee Safety specialist near you may get in touch to offer a site survey.</p>
+  </div>
+  <aside class="side"><h3>Where the hazards are</h3>${plan(r, false)}${KEY}</aside></div>`;
+}
+
+function resultsView(){
+  const r = score(answers), L = LEVELS[r.lvl], n = r.findings.length;
+  return `<div class="head"><div><h1>Your rooftop audit results</h1>
+    <p>${sendStatus ? esc(sendStatus) : "Based on the answers you gave about your roof."}</p></div></div>
+  <div class="sec-rule" style="margin-bottom:26px"></div>
+  ${sample ? `<div class="notice">Sample report. These are example answers, not your roof.</div>` : ""}
+  <div class="verdict"><div><p class="lab">Overall fall risk</p><p class="lvl">${L.name}</p><p>${L.text}</p></div>
+    <div class="scale ${L.key}" role="img" aria-label="${L.name}, level ${r.lvl + 1} of 4">${LEVELS.map((x, i) =>
+      `<div class="${i <= r.lvl ? "on" : ""} ${i === r.lvl ? "cur" : ""}"><i></i><span>${x.name.replace(" risk", "")}</span></div>`).join("")}</div></div>
+  <div class="rcols"><aside class="side"><h3>Where the hazards are</h3>${plan(r, false)}${KEY}</aside>
+    <div><h2>Hazards by area</h2><p class="sub">${n} hazard${n === 1 ? "" : "s"} found across your roof.</p>
+      <ul class="areas">${SECTIONS.map(s => { const k = r.findings.filter(f => f.sec === s.id).length;
+        return `<li><b><i class="sq ${zoneOf(r, s.id)}"></i>${esc(s.title)}</b>${k ? `<span>${k} hazard${k === 1 ? "" : "s"}</span>` : `<span class="ok">None flagged</span>`}</li>`; }).join("")}</ul></div></div>
+  <h2>What to fix, most urgent first</h2><div class="sec-rule"></div>
+  ${n ? r.findings.map(f => { const [k, lab] = sevOf(f.pts);
+    return `<div class="f"><span class="sev"><i class="sq ${k}"></i>${lab}</span>
+      <div><h3>${esc(f.t)}</h3><p>${esc(f.d)}</p><p class="ref">${esc(f.ref)}</p></div>
+      <div class="fix"><small>Recommended fix</small><a class="tlink wrapok" href="${SITE + f.p[1]}" target="_blank" rel="noopener"><span>${esc(f.p[0])}</span>${arrow}</a></div></div>`; }).join("")
+   : `<div class="clear">No hazards were flagged from your answers. A site survey can confirm what a questionnaire cannot see, such as guardrail condition and skylight age.</div>`}
+  <div class="cta"><div><h2>Have a specialist confirm it on site</h2>
+    <p>A Kee Safety hazard assessment survey checks these findings on your roof and prices the fixes. Call <span class="tel">+1 (866) 533-2409</span> or request a quote online.</p></div>
+    <a class="btn yellow" href="${SITE}/contact" target="_blank" rel="noopener">Get a Quote Today</a></div>
+  <div class="after"><button type="button" class="tlink" data-go="0"><i aria-hidden="true">←</i><span>Review my answers</span></button>
+    <button type="button" class="tlink" data-act="restart"><span>Start a new audit</span>${arrow}</button></div>
+  <p class="disc">This self-assessment is a guide based on OSHA 29 CFR 1910 Subpart D, Walking-Working Surfaces. It does not replace a site inspection by a competent person.</p>`;
+}
+
+function render(){
+  $("#app").innerHTML = step === RESULTS ? resultsView() : step === CONTACT ? contactView() : sectionView();
+  try{ parent.postMessage({type:"ks-audit-height", height:document.documentElement.scrollHeight}, "*") }catch(e){}
+}
+function go(i){ step = i; showMissing = false; render(); $("#app").scrollIntoView({behavior:"smooth", block:"start"}); }
+function toReport(){
+  const i = SECTIONS.findIndex(s => !secDone(s));
+  if(i < 0) return go(CONTACT);
+  step = i; showMissing = true; render();
+  const m = document.querySelector(".q.miss"); if(m) m.scrollIntoView({behavior:"smooth", block:"center"});
+}
+
+/* ---------- Events ---------- */
+document.addEventListener("click", e => {
+  const o = e.target.closest(".opt");
+  if(o){
+    answers[o.dataset.q] = o.dataset.v; sample = false;
+    SECTIONS.forEach(s => s.qs.forEach(q => { if(!visible(q)) delete answers[q.id]; }));
+    save(); const y = window.scrollY; render(); window.scrollTo(0, y);
+    const b = document.getElementById(`o-${o.dataset.q}-${o.dataset.v}`); if(b) b.focus();
+    return;
+  }
+  const g = e.target.closest("[data-go]");
+  if(g) return go(+g.dataset.go);
+  const a = e.target.closest("[data-act]"); if(!a) return;
+  const act = a.dataset.act;
+  if(act === "report") toReport();
+  if(act === "next"){
+    if(!secDone(SECTIONS[step])){ showMissing = true; render(); const m = document.querySelector(".q.miss"); if(m) m.scrollIntoView({behavior:"smooth", block:"center"}); return; }
+    step === SECTIONS.length - 1 ? toReport() : go(step + 1);
+  }
+  if(act === "sample"){ answers = {...SAMPLE}; sample = true; contact = {}; sendStatus = ""; go(RESULTS); }
+  if(act === "restart"){ answers = {}; sample = false; contact = {}; sendStatus = ""; save(); go(0); }
+});
+
+document.addEventListener("submit", async e => {
+  if(e.target.id !== "lead") return;
+  e.preventDefault();
+  const form = e.target;
+  ["name","company","email","phone","zipcode"].forEach(id => contact[id] = form.querySelector("#" + id).value.trim());
+  const errs = {
+    name: contact.name.length < 2 ? "Enter your name." : "",
+    email: /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(contact.email) ? "" : "Enter an email address, like you@company.com.",
+    zipcode: /^\d{5}(-\d{4})?$/.test(contact.zipcode) ? "" : "Enter a 5-digit US ZIP code.",
+  };
+  let first = null;
+  Object.entries(errs).forEach(([id, m]) => { const inp = form.querySelector("#" + id);
+    inp.setAttribute("aria-invalid", m ? "true" : "false"); form.querySelector("#e-" + id).textContent = m; if(m && !first) first = inp; });
+  if(first){ first.focus(); return; }
+
+  const btn = form.querySelector("#submit"); btn.disabled = true; btn.textContent = "Building your report…";
+  const r = score(answers), L = LEVELS[r.lvl], fd = new FormData();
+  Object.entries(contact).forEach(([k, v]) => fd.append(k, v));
+  Object.entries(answers).forEach(([k, v]) => fd.append(k, v));
+  fd.append("risk-level", L.name.toUpperCase());
+  fd.append("riskClass", L.key);
+  fd.append("icon", L.icon);
+  fd.append("risk-index", r.idx);
+  fd.append("recommendations", r.findings.map(f => `${f.t}. Recommended: ${f.p[0]} (${f.ref})`).join("\n"));
+  fd.append("summary", r.summary.join("\n"));
+  const failed = "We could not email a copy just now. Your results are below.";
+  sendToZoho(r, L);
+  try{
+    const txt = await (await fetch(SUBMIT_URL, {method:"POST", body:fd})).text();
+    sendStatus = /sent/i.test(txt) ? `A copy of this report is on its way to ${contact.email}.` : failed;
+  }catch(err){ sendStatus = failed; }
+  sample = false; go(RESULTS);
+});
+
+/* Creates the lead through the Zoho CRM webform. Fire-and-forget: Zoho's reply can't be read
+   cross-site, and a CRM hiccup should never block the visitor from seeing their results. */
+function sendToZoho(r, L){
+  if(!ZOHO.xnQsjsdp || !ZOHO.xmIwtLD) return;
+  const F = ZOHO.fields, b = new URLSearchParams();
+  const parts = contact.name.split(/\s+/), last = parts.length > 1 ? parts.pop() : parts[0], first = parts.length ? parts.join(" ") : "";
+  const areas = [...new Set(r.findings.map(f => f.sec))];
+  const desc = [
+    `ROOFTOP SAFETY AUDIT: ${L.name.toUpperCase()} (risk index ${r.idx}/100)`,
+    `${r.findings.length} hazard${r.findings.length === 1 ? "" : "s"} found${areas.length ? " in: " + areas.map(a => SECTIONS.find(s => s.id === a).title).join(", ") : ""}`,
+    "", "HAZARDS, MOST URGENT FIRST",
+    ...r.findings.map(f => `- [${sevOf(f.pts)[1]}] ${f.t}. Fix: ${f.p[0]} (${f.ref})`),
+    "", "ANSWERS", ...r.summary.map(s => "- " + s),
+  ].join("\n");
+  b.append("xnQsjsdp", ZOHO.xnQsjsdp); b.append("xmIwtLD", ZOHO.xmIwtLD);
+  b.append("actionType", "TGVhZHM="); b.append("returnURL", ZOHO.returnURL); b.append("aG9uZXlwb3Q", "");
+  b.append("zc_gad", ""); b.append("wFaTrisJS", "true");
+  b.append(F.first, first); b.append(F.last, last);
+  b.append(F.company, contact.company || "Not provided");
+  b.append(F.email, contact.email); b.append(F.phone, contact.phone); b.append(F.zip, contact.zipcode);
+  b.append(F.description, desc.slice(0, 31000));
+  b.append(F.source, "Web Form");
+  if(F.interests) areas.forEach(a => b.append(F.interests, AREA_TO_INTEREST[a]));
+  fetch(ZOHO.url, {method:"POST", mode:"no-cors", body:b}).catch(() => {});
+}
+
+$("#brandbar").hidden = !SHOW_BRAND_BAR;
+render();
+</script>
+</body>
+</html>
