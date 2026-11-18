@@ -491,7 +491,7 @@ function resultsView(){
 
 function render(){
   $("#app").innerHTML = step === RESULTS ? resultsView() : step === CONTACT ? contactView() : sectionView();
-  try{ parent.postMessage({type:"ks-audit-height", height:document.documentElement.scrollHeight}, "*") }catch(e){}
+  postHeight();
 }
 function go(i){ step = i; showMissing = false; render(); $("#app").scrollIntoView({behavior:"smooth", block:"start"}); }
 function toReport(){
@@ -604,6 +604,16 @@ async function sendToZoho(r, L){
 }
 
 const first0 = n => n.trim().split(/\s+/)[0];
+/* Tell the keesafety.com page how tall the tool is, so its iframe can fit the content.
+   Measures the content itself: the iframe's own height would only ever grow. */
+let lastHeight = 0;
+function postHeight(){
+  if(window.self === window.top) return;
+  const h = Math.ceil(document.body.getBoundingClientRect().height);
+  if(h && h !== lastHeight){ lastHeight = h; try{ parent.postMessage({type:"ks-audit-height", height:h}, "*"); }catch(e){} }
+}
+try{ new ResizeObserver(postHeight).observe(document.body); }catch(e){ setInterval(postHeight, 500); }
+window.addEventListener("load", postHeight);
 /* Report links: the answers ride in the link itself (one character per question), so a saved
    report reopens exactly as it was, with no personal details in the URL. */
 const ALLQ = SECTIONS.flatMap(s => s.qs);
