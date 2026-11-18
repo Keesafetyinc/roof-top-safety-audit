@@ -172,6 +172,9 @@ h2{font-size:20px;line-height:1.3;font-weight:700;color:var(--ink);margin:0 0 4p
 /* Zoho draws its webform at the end of the page; the tool fills and sends it, nobody should see it */
 #zoho-form-box,#crmWebToEntityForm,.crmWebToEntityForm,#wf_splash,.zcwf_tooltip_over{display:none!important}
 .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.unsure{background:var(--tile);padding:18px 22px;margin-top:18px}
+.unsure ul{margin:8px 0 0;padding-left:20px}
+.unsure li{padding:3px 0;color:var(--ink)}
 .linkbox{display:flex;gap:8px;margin-top:12px;max-width:640px}
 .linkbox input{flex:1;min-width:0;font:inherit;font-size:13px;padding:8px 10px;border:1px solid var(--line);color:var(--text)}
 @media print{
@@ -242,6 +245,8 @@ const P = {
    pts: risk points per answer. finding: reported when the answer scores above 0.
    show: follow-up only appears, and only counts, when this returns true. */
 const YN = [["yes","Yes"],["no","No"]];
+const NS = ["notsure","Not sure"]; // offered only where a fair answer could be "I don't know"
+const YNS = [...YN, NS];
 const FREQ = [["daily","Daily"],["weekly","Weekly"],["monthly","Monthly"],["rarely","Rarely"]];
 /* Edge scoring follows OSHA 1910.28(b)(13): how close to the edge, how often, and whether
    fall arrest is used decide how serious a missing guardrail is. */
@@ -255,7 +260,7 @@ function guardrailPts(a){
   return 4;
 }
 function fallArrestPts(a){
-  if(a["fall-arrest"] !== "no") return 0;
+  if(a["fall-arrest"] !== "no") return 0; // "notsure" is handled as unconfirmed, not scored here
   const d = a["edge-distance"];
   if(d === "under-6") return 4;
   if(d === "6-15") return occasional(a) ? 1 : 3;
@@ -271,38 +276,38 @@ const SECTIONS = [
    f:{t:"Roof hatches are unguarded", d:"An open hatch is a hole in the roof. A hatch railing keeps it protected while open and gives the climber a handhold.", p:P.hatch, ref:"OSHA 1910.28(b)(3)"}},
   {id:"chains", t:"Are chains used across ladder openings instead of a gate?", n:"Chains are not an OSHA-compliant barrier.", opts:YN, pts:{yes:2},
    f:{t:"Chains are used in place of gates", d:"Chains get left unhooked and do not meet the strength requirement for a barrier.", p:P.gate, ref:"OSHA 1910.29(b)"}},
-  {id:"ladder-safety", t:"Do fixed ladders over 24 feet have a ladder safety system or a cage?", opts:[["yes","Yes"],["no","No"],["na","No ladders over 24 ft"]], pts:{no:3},
+  {id:"ladder-safety", t:"Do fixed ladders over 24 feet have a ladder safety system or a cage?", opts:[["yes","Yes"],["no","No"],["na","No ladders over 24 ft"], NS], u:"Ladder safety system on fixed ladders over 24 ft", pts:{no:3},
    f:{t:"Tall fixed ladders have no fall protection", d:"Fixed ladders over 24 feet need a ladder safety system or personal fall arrest. Cages alone no longer qualify on new ladders.", p:P.life, ref:"OSHA 1910.28(b)(9)"}},
  ]},
  {id:"openings", title:"Roof openings", sub:"Skylights, shafts and holes someone could step into or fall through.", qs:[
   {id:"skylights", t:"Are there skylights, smoke vents, shafts or other openings on the roof?", opts:YN, pts:{yes:1}},
   {id:"skylight-protection", t:"Is every opening protected by a guardrail, a skylight screen or a cover?", opts:YN, pts:{no:4}, show:a=>a.skylights==="yes",
    f:{t:"Skylights and openings are unprotected", d:"A skylight is treated as a hole in the roof. Each one needs a screen, a cover or a guardrail around it.", p:P.cover, ref:"OSHA 1910.28(b)(3)(i)"}},
-  {id:"skylight-rating", t:"Are the skylights rated to hold a person, and inspected for wear?", n:"Plastic domes turn brittle in sunlight and stop holding weight.", opts:YN, pts:{no:2}, show:a=>a.skylights==="yes",
+  {id:"skylight-rating", t:"Are the skylights rated to hold a person, and inspected for wear?", n:"Plastic domes turn brittle in sunlight and stop holding weight.", opts:YNS, u:"Whether the skylights are rated to hold a person", pts:{no:2}, show:a=>a.skylights==="yes",
    f:{t:"Skylights are not rated or inspected", d:"An unrated or aging dome cannot be trusted to hold a person. Treat it as an open hole until it is protected.", p:P.dome, ref:"OSHA 1910.28(b)(3)(i)"}},
-  {id:"skylight-load", t:"Can existing covers hold at least twice the weight they could be expected to carry?", opts:YN, pts:{no:2}, show:a=>a.skylights==="yes",
+  {id:"skylight-load", t:"Can existing covers hold at least twice the weight they could be expected to carry?", opts:YNS, u:"Whether skylight covers hold twice the expected load", pts:{no:2}, show:a=>a.skylights==="yes",
    f:{t:"Covers may not meet the load requirement", d:"Covers must support at least twice the maximum load they may see, and be secured so they cannot shift.", p:P.cover, ref:"OSHA 1910.29(e)"}},
-  {id:"skylight-bars", t:"Are burglar bars under a skylight the only thing that would stop a fall?", n:"Burglar bars are not an OSHA-compliant fall protection solution.", opts:YN, pts:{yes:3}, show:a=>a.skylights==="yes",
+  {id:"skylight-bars", t:"Are burglar bars under a skylight the only thing that would stop a fall?", n:"Burglar bars are not an OSHA-compliant fall protection solution.", opts:YNS, u:"Whether burglar bars are the only thing under a skylight", pts:{yes:3}, show:a=>a.skylights==="yes",
    f:{t:"Burglar bars are relied on to stop a fall", d:"Security bars are not designed or tested to catch a falling person. Add a rated screen or railing at roof level.", p:P.cover, ref:"OSHA 1910.28(b)(3)(i)"}},
  ]},
  {id:"edges", title:"Roof edges", sub:"The roof perimeter and how close work gets to it.", qs:[
   {id:"edge-distance", t:"How close to the roof edge does work usually happen?", n:"Within 6 ft needs guardrails, travel restraint or fall arrest. From 6 to 15 ft, a designated area is allowed only for infrequent, temporary work.",
    opts:[["under-6","Under 6 ft"],["6-15","6 to 15 ft"],["over-15","Over 15 ft"]], pts:{"under-6":3,"6-15":1}},
-  {id:"guardrails", t:"Is every open edge protected by a guardrail or a parapet at least 39 inches high?", opts:YN, pts:{no:4}, ptsFn:guardrailPts,
+  {id:"guardrails", t:"Is every open edge protected by a guardrail or a parapet at least 39 inches high?", opts:YNS, u:"Guardrail or parapet height along every open edge", pts:{no:4}, ptsFn:guardrailPts,
    f:{t:"Open roof edges have no guardrail", d:"Guardrails protect everyone at the edge with no harness and no training. Freestanding systems install without penetrating the roof membrane.", p:P.guard, ref:"OSHA 1910.28(b)(1)"},
    fLow:{t:"Roof edges rely on harnesses or work rules", d:"With work kept back from the edge or done only occasionally, and fall arrest in use, this is allowed, but it depends on every worker following the rules every time. A guardrail protects anyone who goes near the edge without a harness, training or a rule to enforce.", p:P.guard, ref:"OSHA 1910.28(b)(1), (b)(13)"}},
-  {id:"fall-arrest", t:"Where there is no guardrail, do workers near the edge use fall arrest or travel restraint?", opts:YN, pts:{no:4}, ptsFn:fallArrestPts, show:a=>a.guardrails==="no",
+  {id:"fall-arrest", t:"Where there is no guardrail, do workers near the edge use fall arrest or travel restraint?", opts:YNS, u:"Fall arrest or travel restraint use near the edge", pts:{no:4}, ptsFn:fallArrestPts, show:a=>a.guardrails==="no" || a.guardrails==="notsure",
    f:{t:"No fall protection at unguarded edges", d:"With no guardrail and no harness system, nothing stops a fall. On most roofs this is the first thing to fix.", p:P.line, ref:"OSHA 1910.28(b)(1)"},
    fLow:{t:"No fall protection for occasional edge work", d:"For occasional, temporary work well back from the edge, OSHA allows a designated area or an enforced work rule instead of harnesses. Make sure that rule exists and is followed, or add a lifeline so it doesn't have to be.", p:P.line, ref:"OSHA 1910.28(b)(13)"}},
-  {id:"edge-frequency", t:"How often does work happen near an unprotected edge?", opts:FREQ, pts:{daily:2,weekly:1}, show:a=>a.guardrails==="no"},
-  {id:"warning-lines", t:"On low-slope roofs, are work areas set off from the edge with warning lines?", opts:[["yes","Yes"],["no","No"],["na","Not a low-slope roof"]], pts:{no:2},
+  {id:"edge-frequency", t:"How often does work happen near an unprotected edge?", opts:FREQ, pts:{daily:2,weekly:1}, show:a=>a.guardrails==="no" || a.guardrails==="notsure"},
+  {id:"warning-lines", t:"On low-slope roofs, are work areas set off from the edge with warning lines?", opts:[["yes","Yes"],["no","No"],["na","Not a low-slope roof"], NS], u:"Warning lines on low-slope roof areas", pts:{no:2},
    f:{t:"No warning lines on a low-slope roof", d:"A warning line shows workers where the safe area ends, 15 ft back from the edge.", p:P.mark, ref:"OSHA 1910.28(b)(13)"}},
  ]},
  {id:"obstacles", title:"Obstacles & walkways", sub:"Rooftop equipment, the path workers take to reach it, and what's in the way.", qs:[
-  {id:"obstacles", t:"Is there HVAC equipment, piping, ductwork or other plant on the roof that needs regular maintenance?", opts:YN, pts:{yes:1}},
+  {id:"obstacles", t:"Is there HVAC, piping, ductwork or other equipment on the roof that needs regular maintenance?", opts:YN, pts:{yes:1}},
   {id:"walkway", t:"Is there a defined walkway, a common path, from the roof access point to the equipment?", n:"A set route keeps foot traffic away from edges and skylights and off the roof membrane.", opts:YN, pts:{no:2}, show:a=>a.obstacles==="yes",
    f:{t:"No defined walkway to the equipment", d:"Without a common path, technicians pick their own route across the roof, over pipe runs and close to edges and skylights. A roof walkway sets the route and protects the membrane.", p:P.walk, ref:"OSHA 1910.22"}},
-  {id:"slip-resistant", t:"Is that walkway slip-resistant when wet or icy?", opts:YN, pts:{no:2}, show:a=>a.obstacles==="yes" && a.walkway==="yes",
+  {id:"slip-resistant", t:"Is that walkway slip-resistant when wet or icy?", opts:YNS, u:"Whether the walkway is slip-resistant when wet", pts:{no:2}, show:a=>a.obstacles==="yes" && a.walkway==="yes",
    f:{t:"The walkway is slippery when wet", d:"Roof membranes and bare metal get slick fast. Walkway panels with a slip-resistant grated surface keep footing in rain, frost and ice.", p:P.walk, ref:"OSHA 1910.22(a)"}},
   {id:"pipe-crossings", t:"Do pipes, ducts or conduit cross the path workers walk?", opts:YN, pts:{yes:1}, show:a=>a.obstacles==="yes"},
   {id:"crossovers", t:"Is there a crossover, a step-over with handrails, at every place they cross?", opts:YN, pts:{no:2}, show:a=>a.obstacles==="yes" && a["pipe-crossings"]==="yes",
@@ -329,11 +334,12 @@ const secDone = s => shown(s).every(q => answers[q.id]);
 
 /* ---------- Scoring ---------- */
 function score(a){
-  let total = 0, max = 0; const findings = [], summary = [];
+  let total = 0, max = 0; const findings = [], summary = [], unsure = [];
   SECTIONS.forEach(s => s.qs.forEach(q => {
     if(!visible(q, a)) return;
     max += Math.max(...Object.values(q.pts));
-    const p = q.ptsFn ? q.ptsFn(a) : (q.pts[a[q.id]] || 0); total += p;
+    if(a[q.id] === "notsure"){ total += 1; unsure.push({q:q.id, sec:s.id, label:q.u || q.t}); }
+    const p = a[q.id] === "notsure" ? 0 : q.ptsFn ? q.ptsFn(a) : (q.pts[a[q.id]] || 0); total += p;
     if(p > 0 && q.f) findings.push({...(p <= 2 && q.fLow ? q.fLow : q.f), pts:p, sec:s.id, qid:q.id});
     const lab = (q.opts.find(o => o[0] === a[q.id]) || [])[1];
     if(lab) summary.push(q.t + " " + lab);
@@ -343,7 +349,7 @@ function score(a){
   // Working within 6 ft of an unguarded edge with no harness is critical whatever else is in place.
   if(a["edge-distance"] === "under-6" && a.guardrails === "no" && a["fall-arrest"] === "no") lvl = 3;
   findings.sort((x, y) => y.pts - x.pts);
-  return {idx, lvl, findings, summary};
+  return {idx, lvl, findings, summary, unsure};
 }
 const LEVELS = [
  {key:"low", name:"Low risk", icon:"✅", text:"Your answers show few gaps. Keep inspecting gates, guardrails and skylights at least once a year so it stays that way."},
@@ -478,9 +484,12 @@ function resultsView(){
       <div><h3>${esc(f.t)}</h3><p>${esc(f.d)}</p><p class="ref">${esc(f.ref)}</p></div>
       <div class="fix"><small>Recommended fix</small><a class="tlink wrapok" href="${SITE + f.p[1]}" target="_blank" rel="noopener"><span>${esc(f.p[0])}</span>${arrow}</a></div></div>`; }).join("")
    : `<div class="clear">No hazards were flagged from your answers. A site survey can confirm what a questionnaire cannot see, such as guardrail condition and skylight age.</div>`}
+  ${r.unsure.length ? `<h2 style="margin-top:40px">Worth checking on site</h2><div class="sec-rule"></div>
+    <div class="unsure"><p>You weren't sure about ${r.unsure.length === 1 ? "this" : "these"}. Each one could hide a hazard, and a Kee Safety specialist can check ${r.unsure.length === 1 ? "it" : "them"} during a site visit.</p>
+    <ul>${r.unsure.map(u => `<li>${esc(u.label)}</li>`).join("")}</ul></div>` : ""}
   <div class="cta"><div><h2>Have a specialist confirm it on site</h2>
-    <p>A Kee Safety hazard assessment survey checks these findings on your roof and prices the fixes. Call <span class="tel">+1 (866) 533-2409</span> or request a quote online.</p></div>
-    <a class="btn yellow" href="${SITE}/contact" target="_blank" rel="noopener">Get a Quote Today</a></div>
+    <p>A Kee Safety hazard assessment survey checks these findings on your roof and prices the fixes. Call <span class="tel">+1 (866) 533-2409</span> or schedule online.</p></div>
+    <a class="btn yellow" href="${SITE}/contact" target="_blank" rel="noopener">Schedule Your Assessment Today</a></div>
   <div class="after">${CAN_PRINT ? `<button type="button" class="tlink" data-act="pdf"><span>Save as PDF</span></button>` : ""}
     ${sample ? "" : `<button type="button" class="tlink" data-act="copylink"><span id="copylabel">Copy link to this report</span></button>`}
     <button type="button" class="tlink" data-go="0"><i aria-hidden="true">←</i><span>Review my answers</span></button>
@@ -585,8 +594,10 @@ async function sendToZoho(r, L){
     `ROOFTOP SAFETY AUDIT: ${L.name.toUpperCase()} (risk index ${r.idx}/100)`,
     `Report link: ${reportLink()}`,
     `${r.findings.length} hazard${r.findings.length === 1 ? "" : "s"} found${areas.length ? " in: " + areas.map(a => SECTIONS.find(s => s.id === a).title).join(", ") : ""}`,
+    ...(r.unsure.length ? [`SITE VISIT OPPORTUNITY: ${r.unsure.length} answer${r.unsure.length === 1 ? "" : "s"} marked Not sure`] : []),
     "", "HAZARDS, MOST URGENT FIRST",
     ...r.findings.map(f => `- [${sevOf(f.pts)[1]}] ${f.t}. Fix: ${f.p[0]} (${f.ref})`),
+    ...(r.unsure.length ? ["", "NOT SURE, CHECK ON SITE", ...r.unsure.map(u => "- " + u.label)] : []),
     "", "ANSWERS", ...r.summary.map(s => "- " + s),
   ].join("\n");
   set(F.first, first); set(F.last, last); set(F.company, contact.company || "Not provided");
