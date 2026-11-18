@@ -183,18 +183,21 @@ h2{font-size:20px;line-height:1.3;font-weight:700;color:var(--ink);margin:0 0 4p
 <script>
 /* ---------- Config ---------- */
 const SHOW_BRAND_BAR = false;  // false when embedded on a keesafety.com page that already has the site header
-const SUBMIT_URL = "https://keesafety-admin.com/2026/scripts/send_email.php"; // existing mailer; same field names as the old tool
+const SUBMIT_URL = ""; // old keesafety-admin.com mailer; off, it refuses requests from other sites. Leave empty.
 const SITE = "https://www.keesafety.com";
 
 /* Zoho CRM webform ("Rooftop Safety Audit", Leads module). Copy the two keys from the webform's
    generated embed code. Tags (KeeSafetyContactUsWebForm + interactive_audit), Lead Source and the
    assignment rule are set on the webform itself in Zoho, so they apply to every submission.
    Field names: standard fields use their label; custom fields use the LEADCF name shown in the embed code. */
+/* Zoho CRM webform "Rooftop Safety Audit" (Leads). Zoho issues fresh security keys each time its form
+   loads and silently drops posts with stale ones, so the page loads Zoho's own form hidden, fills it in
+   and posts it. Tags (KeeSafetyContactUsWebForm + interactive_audit), owner and notification are set on
+   the webform in Zoho. To point at a different webform, swap in that form's embed script id and src. */
 const ZOHO = {
   url: "https://crm.zoho.com/crm/WebToLeadForm",
-  xnQsjsdp: "58a1acb5214f228a0a210e5fa585fff4b8819c4ff3752c54c939d581eec7df9a",
-  xmIwtLD: "34ec4df6e51373c8bdccb11b03b8d54d393084fd6d64b7dfdaecef40623b11ea5255242aaefc05ab",
-  returnURL: "https://www.keesafety.com/services/interactive-rooftop-safety-audit-tool",
+  formId: "2913840000385049001",
+  script: "https://crm.zoho.com/crm/WebFormServeServlet?rid=839af01c6ee5172247cb5b48cafe48dc4d972302aceb1d038fe50ca9f30b4699e6aa5297bdb650119b303ccf96d32bd3gidde577e45749dcfd58e78c2787c9e6859202a937c6621b977f99868efa35bf088&script=$sYG",
   fields: {
     first:"First Name", last:"Last Name", company:"Company", email:"Email", phone:"Phone",
     zip:"Zip Code", description:"Description", source:"Lead Source",
@@ -504,20 +507,30 @@ document.addEventListener("submit", async e => {
   fd.append("risk-index", r.idx);
   fd.append("recommendations", r.findings.map(f => `${f.t}. Recommended: ${f.p[0]} (${f.ref})`).join("\n"));
   fd.append("summary", r.summary.join("\n"));
-  const failed = "We could not email a copy just now. Your results are below.";
-  sendToZoho(r, L);
-  try{
-    const txt = await (await fetch(SUBMIT_URL, {method:"POST", body:fd})).text();
-    sendStatus = /sent/i.test(txt) ? `A copy of this report is on its way to ${contact.email}.` : failed;
-  }catch(err){ sendStatus = failed; }
+  const saved = await sendToZoho(r, L);
+  if(SUBMIT_URL){ try{ await fetch(SUBMIT_URL, {method:"POST", body:fd}); }catch(err){} }
+  sendStatus = saved
+    ? `Thanks, ${first0(contact.name)}. A Kee Safety specialist will follow up at ${contact.email}.`
+    : "Your results are below. If you'd like to talk them through, call +1 (866) 533-2409.";
   sample = false; go(RESULTS);
 });
 
 /* Creates the lead through the Zoho CRM webform. Fire-and-forget: Zoho's reply can't be read
    cross-site, and a CRM hiccup should never block the visitor from seeing their results. */
-function sendToZoho(r, L){
-  if(!ZOHO.xnQsjsdp || !ZOHO.xmIwtLD) return;
-  const F = ZOHO.fields, b = new URLSearchParams();
+function loadZohoForm(){
+  if(document.getElementById("formScript" + ZOHO.formId)) return;
+  const box = document.createElement("div"); box.hidden = true; box.id = "zoho-form-box";
+  const sc = document.createElement("script"); sc.id = "formScript" + ZOHO.formId; sc.src = ZOHO.script;
+  box.appendChild(sc); document.body.appendChild(box);
+}
+async function zohoForm(){
+  for(let i = 0; i < 40; i++){ const f = document.getElementById("webform" + ZOHO.formId); if(f) return f; await new Promise(r => setTimeout(r, 150)); }
+  return null;
+}
+async function sendToZoho(r, L){
+  loadZohoForm();
+  const form = await zohoForm(); if(!form) return false;
+  const F = ZOHO.fields, set = (n, v) => { const el = form.elements[n]; if(el) el.value = v; };
   const parts = contact.name.split(/\s+/), last = parts.length > 1 ? parts.pop() : parts[0], first = parts.length ? parts.join(" ") : "";
   const areas = [...new Set(r.findings.map(f => f.sec))];
   const desc = [
@@ -527,18 +540,22 @@ function sendToZoho(r, L){
     ...r.findings.map(f => `- [${sevOf(f.pts)[1]}] ${f.t}. Fix: ${f.p[0]} (${f.ref})`),
     "", "ANSWERS", ...r.summary.map(s => "- " + s),
   ].join("\n");
-  b.append("xnQsjsdp", ZOHO.xnQsjsdp); b.append("xmIwtLD", ZOHO.xmIwtLD);
-  b.append("actionType", "TGVhZHM="); b.append("returnURL", ZOHO.returnURL); b.append("aG9uZXlwb3Q", "");
-  b.append("zc_gad", ""); b.append("wFaTrisJS", "true");
-  b.append(F.first, first); b.append(F.last, last);
-  b.append(F.company, contact.company || "Not provided");
-  b.append(F.email, contact.email); b.append(F.phone, contact.phone); b.append(F.zip, contact.zipcode);
-  b.append(F.description, desc.slice(0, 31000));
-  b.append(F.source, "Web Form");
-  if(F.interests) areas.forEach(a => b.append(F.interests, AREA_TO_INTEREST[a]));
-  fetch(ZOHO.url, {method:"POST", mode:"no-cors", body:b}).catch(() => {});
+  set(F.first, first); set(F.last, last); set(F.company, contact.company || "Not provided");
+  set(F.email, contact.email); set(F.phone, contact.phone); set(F.zip, contact.zipcode);
+  set(F.description, desc.slice(0, 31000)); set(F.source, "Web Form");
+  const ms = form.elements[F.interests];
+  if(ms && ms.options) [...ms.options].forEach(o => o.selected = areas.some(a => AREA_TO_INTEREST[a] === o.value));
+  try{
+    const res = await fetch(ZOHO.url, {method:"POST", body:new FormData(form), cache:"no-cache"});
+    const txt = await res.text();
+    return /"success"\s*:\s*true/.test(txt);
+  }catch(e){
+    try{ await fetch(ZOHO.url, {method:"POST", mode:"no-cors", body:new FormData(form)}); return true; }catch(e2){ return false; }
+  }
 }
 
+const first0 = n => n.trim().split(/\s+/)[0];
+loadZohoForm();
 $("#brandbar").hidden = !SHOW_BRAND_BAR;
 render();
 </script>
