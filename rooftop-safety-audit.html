@@ -169,6 +169,20 @@ h2{font-size:20px;line-height:1.3;font-weight:700;color:var(--ink);margin:0 0 4p
 .disc{font-size:13px;color:var(--muted);margin:22px 0 0;max-width:80ch}
 
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.linkbox{display:flex;gap:8px;margin-top:12px;max-width:640px}
+.linkbox input{flex:1;min-width:0;font:inherit;font-size:13px;padding:8px 10px;border:1px solid var(--line);color:var(--text)}
+@media print{
+  @page{margin:0.5in}
+  body{font-size:12px}
+  .brandbar,.after,.cta .btn,.linkbox,.notice{display:none!important}
+  .wrap{padding:0!important;max-width:none}
+  .verdict,.f,.rcols,.cta,.areas li{break-inside:avoid}
+  .rcols{grid-template-columns:3.2in minmax(0,1fr)}
+  .f{grid-template-columns:1in minmax(0,1fr) 2.2in}
+  *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  a{text-decoration:none}
+}
 </style>
 </head>
 <body>
@@ -185,6 +199,8 @@ h2{font-size:20px;line-height:1.3;font-weight:700;color:var(--ink);margin:0 0 4p
 const SHOW_BRAND_BAR = false;  // false when embedded on a keesafety.com page that already has the site header
 const SUBMIT_URL = ""; // old keesafety-admin.com mailer; off, it refuses requests from other sites. Leave empty.
 const SITE = "https://www.keesafety.com";
+const REPORT_BASE = "https://keesafetyinc.github.io/roof-top-safety-audit/rooftop-safety-audit.html"; // where emailed report links open
+const CAN_PRINT = /(^|\.)github\.io$|(^|\.)keesafety\.com$/.test(location.hostname); // print is blocked in previews
 
 /* Zoho CRM webform ("Rooftop Safety Audit", Leads module). Copy the two keys from the webform's
    generated embed code. Tags (KeeSafetyContactUsWebForm + interactive_audit), Lead Source and the
@@ -281,7 +297,7 @@ const SAMPLE = {"access-frequency":"weekly","ladder-gates":"no","hatch-guards":"
 
 /* ---------- State ---------- */
 const CONTACT = SECTIONS.length, RESULTS = SECTIONS.length + 1;
-let answers = {}, step = 0, contact = {}, sample = false, sendStatus = "", showMissing = false;
+let answers = {}, step = 0, contact = {}, sample = false, sendStatus = "", showMissing = false, savedView = false;
 try{ const s = JSON.parse(localStorage.getItem("ks-roof-audit") || "null"); if(s && s.answers) answers = s.answers; }catch(e){}
 const save = () => { try{ localStorage.setItem("ks-roof-audit", JSON.stringify({answers})) }catch(e){} };
 const visible = (q, a = answers) => !q.show || q.show(a);
@@ -423,7 +439,7 @@ function contactView(){
 function resultsView(){
   const r = score(answers), L = LEVELS[r.lvl], n = r.findings.length;
   return `<div class="head"><div><h1>Your rooftop audit results</h1>
-    <p>${sendStatus ? esc(sendStatus) : "Based on the answers you gave about your roof."}</p></div></div>
+    <p>${sendStatus ? esc(sendStatus) : savedView ? "Your saved report from the Kee Safety Rooftop Safety Audit." : "Based on the answers you gave about your roof."}</p></div></div>
   <div class="sec-rule" style="margin-bottom:26px"></div>
   ${sample ? `<div class="notice">Sample report. These are example answers, not your roof.</div>` : ""}
   <div class="verdict"><div><p class="lab">Overall fall risk</p><p class="lvl">${L.name}</p><p>${L.text}</p></div>
@@ -442,8 +458,11 @@ function resultsView(){
   <div class="cta"><div><h2>Have a specialist confirm it on site</h2>
     <p>A Kee Safety hazard assessment survey checks these findings on your roof and prices the fixes. Call <span class="tel">+1 (866) 533-2409</span> or request a quote online.</p></div>
     <a class="btn yellow" href="${SITE}/contact" target="_blank" rel="noopener">Get a Quote Today</a></div>
-  <div class="after"><button type="button" class="tlink" data-go="0"><i aria-hidden="true">←</i><span>Review my answers</span></button>
+  <div class="after">${CAN_PRINT ? `<button type="button" class="tlink" data-act="pdf"><span>Save as PDF</span></button>` : ""}
+    ${sample ? "" : `<button type="button" class="tlink" data-act="copylink"><span id="copylabel">Copy link to this report</span></button>`}
+    <button type="button" class="tlink" data-go="0"><i aria-hidden="true">←</i><span>Review my answers</span></button>
     <button type="button" class="tlink" data-act="restart"><span>Start a new audit</span>${arrow}</button></div>
+  <div class="linkbox" id="linkbox" hidden><label for="reportlink" class="sr">Report link</label><input id="reportlink" readonly value="${esc(reportLink())}"></div>
   <p class="disc">This self-assessment is a guide based on OSHA 29 CFR 1910 Subpart D, Walking-Working Surfaces. It does not replace a site inspection by a competent person.</p>`;
 }
 
@@ -478,8 +497,14 @@ document.addEventListener("click", e => {
     if(!secDone(SECTIONS[step])){ showMissing = true; render(); const m = document.querySelector(".q.miss"); if(m) m.scrollIntoView({behavior:"smooth", block:"center"}); return; }
     step === SECTIONS.length - 1 ? toReport() : go(step + 1);
   }
-  if(act === "sample"){ answers = {...SAMPLE}; sample = true; contact = {}; sendStatus = ""; go(RESULTS); }
-  if(act === "restart"){ answers = {}; sample = false; contact = {}; sendStatus = ""; save(); go(0); }
+  if(act === "sample"){ savedView = false; answers = {...SAMPLE}; sample = true; contact = {}; sendStatus = ""; go(RESULTS); }
+  if(act === "pdf"){ try{ window.print(); }catch(e){} }
+  if(act === "copylink"){
+    const link = reportLink(), box = $("#linkbox"), lab = $("#copylabel");
+    const fallback = () => { box.hidden = false; const i = $("#reportlink"); i.focus(); i.select(); lab.textContent = "Copy the link below"; };
+    try{ navigator.clipboard.writeText(link).then(() => { lab.textContent = "Link copied"; }, fallback); }catch(e){ fallback(); }
+  }
+  if(act === "restart"){ savedView = false; try{ history.replaceState(null, "", location.pathname + location.search); }catch(e){} answers = {}; sample = false; contact = {}; sendStatus = ""; save(); go(0); }
 });
 
 document.addEventListener("submit", async e => {
@@ -535,6 +560,7 @@ async function sendToZoho(r, L){
   const areas = [...new Set(r.findings.map(f => f.sec))];
   const desc = [
     `ROOFTOP SAFETY AUDIT: ${L.name.toUpperCase()} (risk index ${r.idx}/100)`,
+    `Report link: ${reportLink()}`,
     `${r.findings.length} hazard${r.findings.length === 1 ? "" : "s"} found${areas.length ? " in: " + areas.map(a => SECTIONS.find(s => s.id === a).title).join(", ") : ""}`,
     "", "HAZARDS, MOST URGENT FIRST",
     ...r.findings.map(f => `- [${sevOf(f.pts)[1]}] ${f.t}. Fix: ${f.p[0]} (${f.ref})`),
@@ -555,8 +581,21 @@ async function sendToZoho(r, L){
 }
 
 const first0 = n => n.trim().split(/\s+/)[0];
+/* Report links: the answers ride in the link itself (one character per question), so a saved
+   report reopens exactly as it was, with no personal details in the URL. */
+const ALLQ = SECTIONS.flatMap(s => s.qs);
+function reportLink(){
+  const code = ALLQ.map(q => { const i = q.opts.findIndex(o => o[0] === answers[q.id]); return i < 0 ? "x" : String(i); }).join("");
+  return REPORT_BASE + "#r=1" + code;
+}
+function readReportLink(){
+  const m = /^#r=1([0-9x]+)$/.exec(location.hash || ""); if(!m || m[1].length !== ALLQ.length) return false;
+  const a = {}; ALLQ.forEach((q, i) => { const c = m[1][i]; if(c !== "x" && q.opts[+c]) a[q.id] = q.opts[+c][0]; });
+  answers = a; savedView = true; step = RESULTS; return true;
+}
+readReportLink();
 loadZohoForm();
-$("#brandbar").hidden = !SHOW_BRAND_BAR;
+$("#brandbar").hidden = !(SHOW_BRAND_BAR || window.self === window.top); // logo bar only when opened on its own, e.g. from an emailed link
 render();
 </script>
 </body>
