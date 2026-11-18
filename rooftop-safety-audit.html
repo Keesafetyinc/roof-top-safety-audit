@@ -169,6 +169,8 @@ h2{font-size:20px;line-height:1.3;font-weight:700;color:var(--ink);margin:0 0 4p
 .disc{font-size:13px;color:var(--muted);margin:22px 0 0;max-width:80ch}
 
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+/* Zoho draws its webform at the end of the page; the tool fills and sends it, nobody should see it */
+#zoho-form-box,#crmWebToEntityForm,.crmWebToEntityForm,#wf_splash,.zcwf_tooltip_over{display:none!important}
 .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 .linkbox{display:flex;gap:8px;margin-top:12px;max-width:640px}
 .linkbox input{flex:1;min-width:0;font:inherit;font-size:13px;padding:8px 10px;border:1px solid var(--line);color:var(--text)}
@@ -241,6 +243,25 @@ const P = {
    show: follow-up only appears, and only counts, when this returns true. */
 const YN = [["yes","Yes"],["no","No"]];
 const FREQ = [["daily","Daily"],["weekly","Weekly"],["monthly","Monthly"],["rarely","Rarely"]];
+/* Edge scoring follows OSHA 1910.28(b)(13): how close to the edge, how often, and whether
+   fall arrest is used decide how serious a missing guardrail is. */
+const occasional = a => a["edge-frequency"] === "monthly" || a["edge-frequency"] === "rarely";
+function guardrailPts(a){
+  if(a.guardrails !== "no") return 0;
+  const arrest = a["fall-arrest"] === "yes", d = a["edge-distance"];
+  if(d === "under-6") return arrest ? 2 : 4;
+  if(d === "6-15") return occasional(a) ? 1 : arrest ? 2 : 3;
+  if(d === "over-15") return occasional(a) || arrest ? 1 : 2;
+  return 4;
+}
+function fallArrestPts(a){
+  if(a["fall-arrest"] !== "no") return 0;
+  const d = a["edge-distance"];
+  if(d === "under-6") return 4;
+  if(d === "6-15") return occasional(a) ? 1 : 3;
+  if(d === "over-15") return occasional(a) ? 1 : 2;
+  return 4;
+}
 const SECTIONS = [
  {id:"access", title:"Access points", sub:"Ladders, hatches and doorways onto the roof.", qs:[
   {id:"access-frequency", t:"How often do workers go up onto the roof?", opts:FREQ, pts:{daily:2,weekly:1}},
@@ -267,10 +288,12 @@ const SECTIONS = [
  {id:"edges", title:"Roof edges", sub:"The roof perimeter and how close work gets to it.", qs:[
   {id:"edge-distance", t:"How close to the roof edge does work usually happen?", n:"Within 6 ft needs guardrails, travel restraint or fall arrest. From 6 to 15 ft, a designated area is allowed only for infrequent, temporary work.",
    opts:[["under-6","Under 6 ft"],["6-15","6 to 15 ft"],["over-15","Over 15 ft"]], pts:{"under-6":3,"6-15":1}},
-  {id:"guardrails", t:"Is every open edge protected by a guardrail or a parapet at least 39 inches high?", opts:YN, pts:{no:4},
-   f:{t:"Open roof edges have no guardrail", d:"Guardrails protect everyone at the edge with no harness and no training. Freestanding systems install without penetrating the roof membrane.", p:P.guard, ref:"OSHA 1910.28(b)(1)"}},
-  {id:"fall-arrest", t:"Where there is no guardrail, do workers near the edge use fall arrest or travel restraint?", opts:YN, pts:{no:4}, show:a=>a.guardrails==="no",
-   f:{t:"No fall protection at unguarded edges", d:"With no guardrail and no harness system, nothing stops a fall. On most roofs this is the first thing to fix.", p:P.line, ref:"OSHA 1910.28(b)(1)"}},
+  {id:"guardrails", t:"Is every open edge protected by a guardrail or a parapet at least 39 inches high?", opts:YN, pts:{no:4}, ptsFn:guardrailPts,
+   f:{t:"Open roof edges have no guardrail", d:"Guardrails protect everyone at the edge with no harness and no training. Freestanding systems install without penetrating the roof membrane.", p:P.guard, ref:"OSHA 1910.28(b)(1)"},
+   fLow:{t:"Roof edges rely on harnesses or work rules", d:"With work kept back from the edge or done only occasionally, and fall arrest in use, this is allowed, but it depends on every worker following the rules every time. A guardrail protects anyone who goes near the edge without a harness, training or a rule to enforce.", p:P.guard, ref:"OSHA 1910.28(b)(1), (b)(13)"}},
+  {id:"fall-arrest", t:"Where there is no guardrail, do workers near the edge use fall arrest or travel restraint?", opts:YN, pts:{no:4}, ptsFn:fallArrestPts, show:a=>a.guardrails==="no",
+   f:{t:"No fall protection at unguarded edges", d:"With no guardrail and no harness system, nothing stops a fall. On most roofs this is the first thing to fix.", p:P.line, ref:"OSHA 1910.28(b)(1)"},
+   fLow:{t:"No fall protection for occasional edge work", d:"For occasional, temporary work well back from the edge, OSHA allows a designated area or an enforced work rule instead of harnesses. Make sure that rule exists and is followed, or add a lifeline so it doesn't have to be.", p:P.line, ref:"OSHA 1910.28(b)(13)"}},
   {id:"edge-frequency", t:"How often does work happen near an unprotected edge?", opts:FREQ, pts:{daily:2,weekly:1}, show:a=>a.guardrails==="no"},
   {id:"warning-lines", t:"On low-slope roofs, are work areas set off from the edge with warning lines?", opts:[["yes","Yes"],["no","No"],["na","Not a low-slope roof"]], pts:{no:2},
    f:{t:"No warning lines on a low-slope roof", d:"A warning line shows workers where the safe area ends, 15 ft back from the edge.", p:P.mark, ref:"OSHA 1910.28(b)(13)"}},
@@ -310,8 +333,8 @@ function score(a){
   SECTIONS.forEach(s => s.qs.forEach(q => {
     if(!visible(q, a)) return;
     max += Math.max(...Object.values(q.pts));
-    const p = q.pts[a[q.id]] || 0; total += p;
-    if(p > 0 && q.f) findings.push({...q.f, pts:p, sec:s.id, qid:q.id});
+    const p = q.ptsFn ? q.ptsFn(a) : (q.pts[a[q.id]] || 0); total += p;
+    if(p > 0 && q.f) findings.push({...(p <= 2 && q.fLow ? q.fLow : q.f), pts:p, sec:s.id, qid:q.id});
     const lab = (q.opts.find(o => o[0] === a[q.id]) || [])[1];
     if(lab) summary.push(q.t + " " + lab);
   }));
