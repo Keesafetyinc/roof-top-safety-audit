@@ -54,6 +54,8 @@ h2{font-size:20px;line-height:1.3;font-weight:700;color:var(--ink);margin:0 0 4p
 .rule::before{content:"";position:absolute;left:0;right:0;bottom:0;height:1px;background:var(--line)}
 .rule i{position:absolute;left:0;bottom:0;height:3px;background:var(--yellow);min-width:48px;transition:width .3s}
 .count{font-size:13px;color:var(--muted);margin:6px 0 0;font-variant-numeric:tabular-nums}
+.count b{color:var(--ink);font-weight:700}
+.count .dot{margin:0 8px}
 
 /* Tabs, as on the site's product rows */
 .tabs{display:flex;gap:6px 30px;border-bottom:1px solid var(--line);margin:14px 0 30px;overflow-x:auto}
@@ -481,7 +483,7 @@ function chrome(){
     <p>${QUICK ? "A few quick questions, about 60 seconds. See your roof's fall risk and what to fix first." : "Answer a few questions about your roof. We flag the fall hazards and show you how to fix each one."}</p></div>`}
     <button type="button" class="tlink" data-act="sample"><span>See a sample report</span>${arrow}</button></div>
   <div class="rule" role="progressbar" aria-valuemin="0" aria-valuemax="${all.length}" aria-valuenow="${done}" aria-label="Questions answered"><i style="width:${done / all.length * 100}%"></i></div>
-  <p class="count">${done} of ${all.length} questions answered</p>
+  <p class="count">${QUICK ? "" : `<b>Step ${Math.min(step, SECTIONS.length) + 1} of ${SECTIONS.length + 1}</b> · ${esc(step < SECTIONS.length ? SECTIONS[step].title : "Your report")}<span class="dot">·</span>`}${done} of ${all.length} questions answered</p>
   ${QUICK ? `<div style="height:22px"></div>` : `<div class="tabs" role="navigation" aria-label="Audit sections">${SECTIONS.map((s, i) =>
     `<button type="button" data-go="${i}" ${i === step ? 'aria-current="step"' : ""}>${secDone(s) ? '<span class="ck" aria-label="Complete">✓</span>' : ""}${esc(s.title)}</button>`).join("")}
     <button type="button" data-act="report" ${step === CONTACT ? 'aria-current="step"' : ""}>Your report</button></div>`}`;
