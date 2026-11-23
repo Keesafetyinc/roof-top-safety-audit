@@ -204,7 +204,11 @@ h2{font-size:20px;line-height:1.3;font-weight:700;color:var(--ink);margin:0 0 4p
 const SHOW_BRAND_BAR = false;  // false when embedded on a keesafety.com page that already has the site header
 const SUBMIT_URL = ""; // old keesafety-admin.com mailer; off, it refuses requests from other sites. Leave empty.
 const SITE = "https://www.keesafety.com";
-const REPORT_BASE = "https://keesafetyinc.github.io/roof-top-safety-audit/rooftop-safety-audit.html"; // where emailed report links open
+const MODE = "full"; // "full" = Rooftop Safety Audit, "quick" = 60-second Quick Check. Both files are built from this one.
+const QUICK = MODE === "quick";
+const PAGES = "https://keesafetyinc.github.io/roof-top-safety-audit/";
+const REPORT_BASE = PAGES + (QUICK ? "rooftop-quick-check.html" : "rooftop-safety-audit.html"); // where emailed report links open
+const FULL_AUDIT_PAGE = "https://www.keesafety.com/services/interactive-rooftop-safety-audit-tool";
 const CAN_PRINT = /(^|\.)github\.io$|(^|\.)keesafety\.com$/.test(location.hostname); // print is blocked in previews
 
 /* Zoho CRM webform ("Rooftop Safety Audit", Leads module). Copy the two keys from the webform's
@@ -225,7 +229,8 @@ const ZOHO = {
     interests:"LEADCF8", // Product Interests (multi-select)
   },
 };
-const AREA_TO_INTEREST = {access:"Access Points", openings:"Rooftop Openings", edges:"Unprotected Edges", obstacles:"Obstacles on the Roof / Unsafe Walkways"};
+const AREA_TO_INTEREST = {access:"Access Points", openings:"Rooftop Openings", edges:"Unprotected Edges", obstacles:"Obstacles on the Roof / Unsafe Walkways", special:"Unprotected Edges"};
+const AREAS = [{id:"access", title:"Access points"}, {id:"openings", title:"Roof openings"}, {id:"edges", title:"Roof edges"}, {id:"obstacles", title:"Obstacles & walkways"}, {id:"special", title:"Solar & steep roofs"}];
 const P = {
   gate:["Kee Gate® self-closing safety gate","/safety-gates/kee-gate"],
   hatch:["Kee Hatch® railing","/roof-railings/kee-hatch"],
@@ -267,7 +272,12 @@ function fallArrestPts(a){
   if(d === "over-15") return occasional(a) ? 1 : 2;
   return 4;
 }
-const SECTIONS = [
+function solarPts(a){ // panels near an edge only matter when that edge has no guardrail
+  if(a.guardrails === "yes") return 0;
+  return a["solar-distance"] === "under-6" ? 3 : a["solar-distance"] === "6-15" ? 2 : 0;
+}
+const COUNT_NOTE = "Helps us size a quote. It doesn't change your score.";
+const FULL_SECTIONS = [
  {id:"access", title:"Access points", sub:"Ladders, hatches and doorways onto the roof.", qs:[
   {id:"access-frequency", t:"How often do workers go up onto the roof?", opts:FREQ, pts:{daily:2,weekly:1}},
   {id:"ladder-gates", t:"Do ladder openings at the roof edge have a self-closing gate or an offset entry?", opts:YN, pts:{no:3},
@@ -278,9 +288,11 @@ const SECTIONS = [
    f:{t:"Chains are used in place of gates", d:"Chains get left unhooked and do not meet the strength requirement for a barrier.", p:P.gate, ref:"OSHA 1910.29(b)"}},
   {id:"ladder-safety", t:"Do fixed ladders over 24 feet have a ladder safety system or a cage?", opts:[["yes","Yes"],["no","No"],["na","No ladders over 24 ft"], NS], u:"Ladder safety system on fixed ladders over 24 ft", pts:{no:3},
    f:{t:"Tall fixed ladders have no fall protection", d:"Fixed ladders over 24 feet need a ladder safety system or personal fall arrest. Cages alone no longer qualify on new ladders.", p:P.life, ref:"OSHA 1910.28(b)(9)"}},
+  {id:"access-count", t:"About how many roof hatches and fixed ladders lead onto this roof?", n:COUNT_NOTE, opts:[["0","None, stairs or a door"],["1","1"],["2-5","2 to 5"],["6-10","6 to 10"],["10plus","More than 10"]], pts:{}},
  ]},
  {id:"openings", title:"Roof openings", sub:"Skylights, shafts and holes someone could step into or fall through.", qs:[
   {id:"skylights", t:"Are there skylights, smoke vents, shafts or other openings on the roof?", opts:YN, pts:{yes:1}},
+  {id:"skylight-count", t:"About how many skylights and openings are there?", n:COUNT_NOTE, opts:[["1-5","1 to 5"],["6-20","6 to 20"],["21-50","21 to 50"],["50plus","More than 50"]], pts:{}, show:a=>a.skylights==="yes"},
   {id:"skylight-protection", t:"Is every opening protected by a guardrail, a skylight screen or a cover?", opts:YN, pts:{no:4}, show:a=>a.skylights==="yes",
    f:{t:"Skylights and openings are unprotected", d:"A skylight is treated as a hole in the roof. Each one needs a screen, a cover or a guardrail around it.", p:P.cover, ref:"OSHA 1910.28(b)(3)(i)"}},
   {id:"skylight-rating", t:"Are the skylights rated to hold a person, and inspected for wear?", n:"Plastic domes turn brittle in sunlight and stop holding weight.", opts:YNS, u:"Whether the skylights are rated to hold a person", pts:{no:2}, show:a=>a.skylights==="yes",
@@ -317,17 +329,55 @@ const SECTIONS = [
   {id:"high-visibility", t:"Are trip hazards and low obstacles marked in high-visibility colors?", opts:YN, pts:{no:1}, show:a=>a.obstacles==="yes",
    f:{t:"Obstacles are not marked", d:"High-visibility marking helps workers spot low pipe, conduit and curbs, especially in poor light.", p:P.survey, ref:"OSHA 1910.22"}},
  ]},
+ {id:"special", title:"Solar & steep roofs", sub:"Solar arrays near the edge and roofs too steep to walk safely.", qs:[
+  {id:"solar", t:"Are there solar panels on the roof?", opts:YN, pts:{yes:1}},
+  {id:"solar-distance", t:"How close to the roof edge are the nearest panels?", n:"Panel cleaning and repairs keep workers looking at the array, not the drop.", opts:[["under-6","Under 6 ft"],["6-15","6 to 15 ft"],["over-15","Over 15 ft"], NS], u:"How close the solar panels are to the roof edge", pts:{"under-6":3,"6-15":2}, ptsFn:solarPts, show:a=>a.solar==="yes",
+   f:{t:"Solar panels sit close to an unprotected edge", d:"Technicians cleaning and servicing panels near the edge are watching the array, not the drop. A guardrail along that edge, or a lifeline over the array, protects them while they work.", p:P.guard, ref:"OSHA 1910.28(b)(1)"}},
+  {id:"steep", t:"Does work happen on any steep roof, steeper than 4 in 12 (about 18°)?", n:"OSHA counts a roof up to 4 in 12 as low-slope. Anything steeper is a steep roof.", opts:YN, pts:{yes:1}},
+  {id:"steep-material", t:"What is the steep roof covered with?", n:"This tells us which anchors fit. It doesn't change your score.", opts:[["metal","Metal"],["membrane","Membrane"],["shingle","Shingle or tile"],["other","Other"]], pts:{}, show:a=>a.steep==="yes"},
+  {id:"steep-protection", t:"Do workers on the steep roof tie off to roof anchors or a lifeline?", opts:YNS, u:"Fall protection on the steep roof", pts:{no:4}, show:a=>a.steep==="yes",
+   f:{t:"No fall protection on a steep roof", d:"On a steep roof a slip becomes a slide to the edge almost at once. Roof anchors or a lifeline let workers stay tied off as they move, and we'll match the anchor to your roof covering.", p:P.life, ref:"OSHA 1910.28(b)(1)"}},
+ ]},
 ];
+/* 60-second Quick Check: one screen, the biggest hazard in each area. "area" files each answer
+   under the same areas as the full audit so the roof plan, report and Zoho fields work the same. */
+const QUICK_SECTIONS = [
+ {id:"quick", title:"Quick check", sub:"Answer for the roof you know best.", qs:[
+  {id:"qk-frequency", area:"access", t:"How often do workers go up onto the roof?", opts:FREQ, pts:{daily:2,weekly:1}},
+  {id:"qk-access", area:"access", t:"Are roof hatches and ladder openings guarded with railings or self-closing gates?", opts:YNS, u:"Whether hatches and ladder openings are guarded", pts:{no:3},
+   f:{t:"Roof hatches or ladder openings are unguarded", d:"An open hatch or ladder opening is a hole right where people step onto the roof. A hatch railing or self-closing gate closes it off every time.", p:P.gate, ref:"OSHA 1910.28(b)(3)"}},
+  {id:"qk-skylights", area:"openings", t:"Is every skylight and roof opening protected with a screen, cover or railing?", opts:[["yes","Yes"],["no","No"],["none","No skylights"], NS], u:"Whether every skylight is protected", pts:{no:4},
+   f:{t:"Skylights and openings are unprotected", d:"A skylight is treated as a hole in the roof. Each one needs a screen, a cover or a guardrail around it.", p:P.cover, ref:"OSHA 1910.28(b)(3)(i)"}},
+  {id:"qk-guardrails", area:"edges", t:"Is every open roof edge protected by a guardrail or a parapet at least 39 inches high?", opts:YNS, u:"Guardrail or parapet height along every open edge", pts:{no:4}, ptsFn:a => a["qk-guardrails"] !== "no" ? 0 : a["qk-arrest"] === "yes" ? 2 : 4,
+   f:{t:"Open roof edges have no guardrail", d:"Guardrails protect everyone at the edge with no harness and no training. Freestanding systems install without penetrating the roof membrane.", p:P.guard, ref:"OSHA 1910.28(b)(1)"},
+   fLow:{t:"Roof edges rely on harnesses", d:"Fall arrest is allowed, but it depends on every worker clipping in every time. A guardrail protects anyone who goes near the edge without a harness or training.", p:P.guard, ref:"OSHA 1910.28(b)(1)"}},
+  {id:"qk-arrest", area:"edges", t:"Where there is no guardrail, do workers near the edge use fall arrest or travel restraint?", opts:YNS, u:"Fall arrest or travel restraint use near the edge", pts:{no:4}, show:a=>a["qk-guardrails"]==="no" || a["qk-guardrails"]==="notsure",
+   f:{t:"No fall protection at unguarded edges", d:"With no guardrail and no harness system, nothing stops a fall. On most roofs this is the first thing to fix.", p:P.line, ref:"OSHA 1910.28(b)(1)"}},
+  {id:"qk-walkway", area:"obstacles", t:"Is there a defined walkway from the roof access point to the equipment workers service?", opts:[["yes","Yes"],["no","No"],["none","No rooftop equipment"]], pts:{no:2},
+   f:{t:"No defined walkway to the equipment", d:"Without a common path, technicians pick their own route across the roof, over pipe runs and close to edges and skylights. A roof walkway sets the route.", p:P.walk, ref:"OSHA 1910.22"}},
+  {id:"qk-crossings", area:"obstacles", t:"Do workers have to step over pipes, ducts or conduit to get around?", opts:YN, pts:{yes:2},
+   f:{t:"Pipes and ducts block the walking path", d:"Stepping over pipe and conduit is a common cause of trips and falls, and it damages the pipe. A crossover gives a safe step with handrails at each crossing.", p:P.step, ref:"OSHA 1910.22"}},
+  {id:"qk-platform", area:"obstacles", t:"Do workers stand on equipment, curbs or step ladders to reach controls or get between roof levels?", opts:YN, pts:{yes:3},
+   f:{t:"Workers climb onto equipment to reach it", d:"Standing on units, curbs or step ladders puts workers at height with nothing to hold. A work platform with guardrails gives them a stable, guarded place to stand.", p:P.platform, ref:"OSHA 1910.22, 1910.28(b)(1)"}},
+  {id:"qk-solar", area:"special", t:"Are there solar panels within 15 ft of a roof edge?", opts:[["yes","Yes"],["no","No"],["none","No solar panels"]], pts:{yes:3}, ptsFn:a => a["qk-solar"] === "yes" && a["qk-guardrails"] !== "yes" ? 3 : 0,
+   f:{t:"Solar panels sit close to an unprotected edge", d:"Technicians servicing panels near the edge are watching the array, not the drop. A guardrail along that edge, or a lifeline over the array, protects them while they work.", p:P.guard, ref:"OSHA 1910.28(b)(1)"}},
+ ]},
+];
+const SECTIONS = QUICK ? QUICK_SECTIONS : FULL_SECTIONS;
+const AREA_OF = {}; SECTIONS.forEach(s => s.qs.forEach(q => AREA_OF[q.id] = q.area || s.id));
+const MODE_AREAS = AREAS.filter(ar => Object.values(AREA_OF).includes(ar.id));
 const SAMPLE = {"access-frequency":"weekly","ladder-gates":"no","hatch-guards":"yes","chains":"yes","ladder-safety":"na",
  "skylights":"yes","skylight-protection":"no","skylight-rating":"no","skylight-load":"yes","skylight-bars":"no",
  "edge-distance":"under-6","guardrails":"no","fall-arrest":"yes","edge-frequency":"weekly","warning-lines":"no",
- "obstacles":"yes","walkway":"yes","slip-resistant":"no","pipe-crossings":"yes","crossovers":"no","platform":"yes","high-visibility":"no"};
+ "obstacles":"yes","walkway":"yes","slip-resistant":"no","pipe-crossings":"yes","crossovers":"no","platform":"yes","high-visibility":"no",
+ "access-count":"2-5","skylight-count":"6-20","solar":"yes","solar-distance":"under-6","steep":"no"};
+const QUICK_SAMPLE = {"qk-frequency":"weekly","qk-access":"no","qk-skylights":"no","qk-guardrails":"no","qk-arrest":"yes","qk-walkway":"no","qk-crossings":"yes","qk-platform":"yes","qk-solar":"yes"};
 
 /* ---------- State ---------- */
 const CONTACT = SECTIONS.length, RESULTS = SECTIONS.length + 1;
 let answers = {}, step = 0, contact = {}, sample = false, sendStatus = "", showMissing = false, savedView = false;
-try{ const s = JSON.parse(localStorage.getItem("ks-roof-audit") || "null"); if(s && s.answers) answers = s.answers; }catch(e){}
-const save = () => { try{ localStorage.setItem("ks-roof-audit", JSON.stringify({answers})) }catch(e){} };
+try{ const s = JSON.parse(localStorage.getItem(QUICK ? "ks-roof-quick" : "ks-roof-audit") || "null"); if(s && s.answers) answers = s.answers; }catch(e){}
+const save = () => { try{ localStorage.setItem(QUICK ? "ks-roof-quick" : "ks-roof-audit", JSON.stringify({answers})) }catch(e){} };
 const visible = (q, a = answers) => !q.show || q.show(a);
 const shown = s => s.qs.filter(q => visible(q));
 const secDone = s => shown(s).every(q => answers[q.id]);
@@ -337,10 +387,10 @@ function score(a){
   let total = 0, max = 0; const findings = [], summary = [], unsure = [];
   SECTIONS.forEach(s => s.qs.forEach(q => {
     if(!visible(q, a)) return;
-    max += Math.max(...Object.values(q.pts));
-    if(a[q.id] === "notsure"){ total += 1; unsure.push({q:q.id, sec:s.id, label:q.u || q.t}); }
+    max += Math.max(0, ...Object.values(q.pts));
+    if(a[q.id] === "notsure"){ total += 1; unsure.push({q:q.id, sec:AREA_OF[q.id], label:q.u || q.t}); }
     const p = a[q.id] === "notsure" ? 0 : q.ptsFn ? q.ptsFn(a) : (q.pts[a[q.id]] || 0); total += p;
-    if(p > 0 && q.f) findings.push({...(p <= 2 && q.fLow ? q.fLow : q.f), pts:p, sec:s.id, qid:q.id});
+    if(p > 0 && q.f) findings.push({...(p <= 2 && q.fLow ? q.fLow : q.f), pts:p, sec:AREA_OF[q.id], qid:q.id});
     const lab = (q.opts.find(o => o[0] === a[q.id]) || [])[1];
     if(lab) summary.push(q.t + " " + lab);
   }));
@@ -348,6 +398,7 @@ function score(a){
   let lvl = idx >= 60 ? 3 : idx >= 40 ? 2 : idx >= 20 ? 1 : 0;
   // Working within 6 ft of an unguarded edge with no harness is critical whatever else is in place.
   if(a["edge-distance"] === "under-6" && a.guardrails === "no" && a["fall-arrest"] === "no") lvl = 3;
+  if(a["qk-guardrails"] === "no" && a["qk-arrest"] === "no") lvl = 3;
   findings.sort((x, y) => y.pts - x.pts);
   return {idx, lvl, findings, summary, unsure};
 }
@@ -364,14 +415,18 @@ const zoneOf = (r, id) => { const m = Math.max(0, ...r.findings.filter(f => f.se
    Each drawn item lights up from the specific answers that concern it, so a visitor
    sees the exact pipe, walkway or unit that is the problem. */
 const ELEMENTS = {
-  edge:["guardrails","fall-arrest","warning-lines"], ladder:["ladder-gates","chains","ladder-safety"], hatch:["hatch-guards"],
-  skylights:["skylight-protection","skylight-rating","skylight-load","skylight-bars"],
-  walkway:["walkway","slip-resistant"], pipe:["crossovers","high-visibility"], rtu:["platform"],
+  edge:["guardrails","fall-arrest","warning-lines","steep-protection","qk-guardrails","qk-arrest"],
+  ladder:["ladder-gates","chains","ladder-safety","qk-access"], hatch:["hatch-guards","qk-access"],
+  skylights:["skylight-protection","skylight-rating","skylight-load","skylight-bars","qk-skylights"],
+  walkway:["walkway","slip-resistant","qk-walkway"], pipe:["crossovers","high-visibility","qk-crossings"], rtu:["platform","qk-platform"],
+  solar:["solar-distance","qk-solar"],
 };
 const stateOf = (r, el) => { const m = Math.max(0, ...r.findings.filter(f => ELEMENTS[el].includes(f.qid)).map(f => f.pts)); return m >= 3 ? "urgent" : m > 0 ? "flag" : ""; };
 function plan(r, interactive){
-  const sec = { edge:"edges", ladder:"access", hatch:"access", skylights:"openings", walkway:"obstacles", pipe:"obstacles", rtu:"obstacles" };
-  const g = el => `class="z ${stateOf(r, el)} ${interactive && SECTIONS[step] && SECTIONS[step].id === sec[el] ? "active" : ""} ${interactive ? "" : "static"}" ${interactive ? `data-go="${SECTIONS.findIndex(s => s.id === sec[el])}"` : ""}`;
+  const sec = { edge:"edges", ladder:"access", hatch:"access", skylights:"openings", walkway:"obstacles", pipe:"obstacles", rtu:"obstacles", solar:"special" };
+  const g = el => `class="z ${stateOf(r, el)} ${interactive && SECTIONS[step] && SECTIONS[step].id === sec[el] ? "active" : ""} ${interactive ? "" : "static"}" ${interactive ? `data-go="${Math.max(0, SECTIONS.findIndex(s => s.id === sec[el]))}"` : ""}`;
+  const hasSolar = answers.solar === "yes" || answers["qk-solar"] === "yes";
+  const panel = (x, y) => `<rect class="s" x="${x}" y="${y}" width="18" height="30"/><path class="d" d="M${x} ${y+10}h18M${x} ${y+20}h18"/>`;
   const sky = x => `<rect class="s" x="${x}" y="62" width="34" height="46"/><path class="d" d="M${x} 62l34 46M${x+34} 62l-34 46"/>`;
   const rtu = (x, n) => `<rect class="s" x="${x}" y="146" width="44" height="44"/><circle class="d" cx="${x+22}" cy="168" r="13"/><text x="${x}" y="139">RTU-${n}</text>`;
   const pipe = "M172 136V212H318V190M250 190V212";
@@ -407,6 +462,7 @@ function plan(r, interactive){
     <text x="180" y="226">PIPE RUN</text>
   </g>
   <g ${g("rtu")}>${rtu(228, 1)}${rtu(296, 2)}</g>
+  ${hasSolar ? `<g ${g("solar")}>${panel(294,46)}${panel(315,46)}${panel(336,46)}${panel(294,80)}${panel(315,80)}${panel(336,80)}<text x="294" y="124">SOLAR</text></g>` : ""}
   </svg>`;
 }
 const KEY = `<div class="key"><span><i class="sq urgent"></i>Urgent hazard</span><span><i class="sq flag"></i>Hazard</span><span><i class="sq"></i>None flagged</span></div>`;
@@ -418,20 +474,20 @@ const arrow = `<i aria-hidden="true">→</i>`;
 
 function chrome(){
   const all = SECTIONS.flatMap(shown), done = all.filter(q => answers[q.id]).length;
-  return `<div class="head"><div><h1>Rooftop Safety Audit</h1>
-    <p>Answer a few questions about your roof. We flag the fall hazards and show you how to fix each one.</p></div>
+  return `<div class="head"><div><h1>${QUICK ? "Rooftop Safety Quick Check" : "Rooftop Safety Audit"}</h1>
+    <p>${QUICK ? "A few quick questions, about 60 seconds. See your roof's fall risk and what to fix first." : "Answer a few questions about your roof. We flag the fall hazards and show you how to fix each one."}</p></div>
     <button type="button" class="tlink" data-act="sample"><span>See a sample report</span>${arrow}</button></div>
   <div class="rule" role="progressbar" aria-valuemin="0" aria-valuemax="${all.length}" aria-valuenow="${done}" aria-label="Questions answered"><i style="width:${done / all.length * 100}%"></i></div>
   <p class="count">${done} of ${all.length} questions answered</p>
-  <div class="tabs" role="navigation" aria-label="Audit sections">${SECTIONS.map((s, i) =>
+  ${QUICK ? `<div style="height:22px"></div>` : `<div class="tabs" role="navigation" aria-label="Audit sections">${SECTIONS.map((s, i) =>
     `<button type="button" data-go="${i}" ${i === step ? 'aria-current="step"' : ""}>${secDone(s) ? '<span class="ck" aria-label="Complete">✓</span>' : ""}${esc(s.title)}</button>`).join("")}
-    <button type="button" data-act="report" ${step === CONTACT ? 'aria-current="step"' : ""}>Your report</button></div>`;
+    <button type="button" data-act="report" ${step === CONTACT ? 'aria-current="step"' : ""}>Your report</button></div>`}`;
 }
 
 function sectionView(){
   const s = SECTIONS[step], r = score(answers), last = step === SECTIONS.length - 1;
   return chrome() + `<div class="cols asking"><div>
-    <h2>${esc(s.title)}</h2><p class="sub">${esc(s.sub)}</p>
+    ${QUICK ? "" : `<h2>${esc(s.title)}</h2>`}<p class="sub">${esc(s.sub)}</p>
     ${shown(s).map(q => `<div class="q ${showMissing && !answers[q.id] ? "miss" : ""}" id="q-${q.id}" role="group" aria-labelledby="t-${q.id}">
       <p class="q-t" id="t-${q.id}">${esc(q.t)}</p>
       ${q.n || q.f ? `<p class="q-n">${esc([q.n, q.f && q.f.ref].filter(Boolean).join(" "))}</p>` : ""}
@@ -449,7 +505,7 @@ function contactView(){
   const f = (id, l, type, req, extra) => `<div class="field"><label for="${id}">${l}${req ? " <em>*</em>" : ""}</label>
     <input id="${id}" name="${id}" type="${type}" ${req ? "required" : ""} value="${esc(contact[id] || "")}" ${extra}><div class="err" id="e-${id}" role="alert"></div></div>`;
   return chrome() + `<div class="cols"><div>
-    <h2>${n ? `We found ${n} hazard${n === 1 ? "" : "s"} in ${areas} of ${SECTIONS.length} areas` : "Your audit is ready"}</h2>
+    <h2>${n ? `We found ${n} hazard${n === 1 ? "" : "s"} in ${areas} of ${MODE_AREAS.length} areas` : QUICK ? "Your quick check is ready" : "Your audit is ready"}</h2>
     <p class="sub">Tell us where to send the report. Your results open on the next screen and a copy goes to your inbox.</p>
     <form id="lead" novalidate><div class="form">
       ${f("name", "Full name", "text", 1, 'autocomplete="name"')}
@@ -467,8 +523,8 @@ function contactView(){
 
 function resultsView(){
   const r = score(answers), L = LEVELS[r.lvl], n = r.findings.length;
-  return `<div class="head"><div><h1>Your rooftop audit results</h1>
-    <p>${sendStatus ? esc(sendStatus) : savedView ? "Your saved report from the Kee Safety Rooftop Safety Audit." : "Based on the answers you gave about your roof."}</p></div></div>
+  return `<div class="head"><div><h1>${QUICK ? "Your rooftop quick check results" : "Your rooftop audit results"}</h1>
+    <p>${sendStatus ? esc(sendStatus) : savedView ? (QUICK ? "Your saved report from the Kee Safety Rooftop Safety Quick Check." : "Your saved report from the Kee Safety Rooftop Safety Audit.") : "Based on the answers you gave about your roof."}</p></div></div>
   <div class="sec-rule" style="margin-bottom:26px"></div>
   ${sample ? `<div class="notice">Sample report. These are example answers, not your roof.</div>` : ""}
   <div class="verdict"><div><p class="lab">Overall fall risk</p><p class="lvl">${L.name}</p><p>${L.text}</p></div>
@@ -476,7 +532,7 @@ function resultsView(){
       `<div class="${i <= r.lvl ? "on" : ""} ${i === r.lvl ? "cur" : ""}"><i></i><span>${x.name.replace(" risk", "")}</span></div>`).join("")}</div></div>
   <div class="rcols"><aside class="side"><h3>Where the hazards are</h3>${plan(r, false)}${KEY}</aside>
     <div><h2>Hazards by area</h2><p class="sub">${n} hazard${n === 1 ? "" : "s"} found across your roof.</p>
-      <ul class="areas">${SECTIONS.map(s => { const k = r.findings.filter(f => f.sec === s.id).length;
+      <ul class="areas">${MODE_AREAS.map(s => { const k = r.findings.filter(f => f.sec === s.id).length;
         return `<li><b><i class="sq ${zoneOf(r, s.id)}"></i>${esc(s.title)}</b>${k ? `<span>${k} hazard${k === 1 ? "" : "s"}</span>` : `<span class="ok">None flagged</span>`}</li>`; }).join("")}</ul></div></div>
   <h2>What to fix, most urgent first</h2><div class="sec-rule"></div>
   ${n ? r.findings.map(f => { const [k, lab] = sevOf(f.pts);
@@ -487,6 +543,9 @@ function resultsView(){
   ${r.unsure.length ? `<h2 style="margin-top:40px">Worth checking on site</h2><div class="sec-rule"></div>
     <div class="unsure"><p>You weren't sure about ${r.unsure.length === 1 ? "this" : "these"}. Each one could hide a hazard, and a Kee Safety specialist can check ${r.unsure.length === 1 ? "it" : "them"} during a site visit.</p>
     <ul>${r.unsure.map(u => `<li>${esc(u.label)}</li>`).join("")}</ul></div>` : ""}
+  ${QUICK ? `<div class="unsure" style="margin-top:40px"><h3 style="margin:0 0 4px;color:var(--ink)">Want the full picture?</h3>
+    <p>This quick check covers the biggest hazards. The full Rooftop Safety Audit goes deeper on ladders, skylight ratings, warning lines, walkways, solar and steep roofs, in about 5 minutes.</p>
+    <p style="margin-top:10px"><a class="tlink" href="${FULL_AUDIT_PAGE}" target="_top"><span>Take the full Rooftop Safety Audit</span>${arrow}</a></p></div>` : ""}
   <div class="cta"><div><h2>Have a specialist confirm it on site</h2>
     <p>A Kee Safety hazard assessment survey checks these findings on your roof and prices the fixes. Call <span class="tel">+1 (866) 533-2409</span> or schedule online.</p></div>
     <a class="btn yellow" href="${SITE}/contact" target="_blank" rel="noopener">Schedule Your Assessment Today</a></div>
@@ -529,7 +588,7 @@ document.addEventListener("click", e => {
     if(!secDone(SECTIONS[step])){ showMissing = true; render(); const m = document.querySelector(".q.miss"); if(m) m.scrollIntoView({behavior:"smooth", block:"center"}); return; }
     step === SECTIONS.length - 1 ? toReport() : go(step + 1);
   }
-  if(act === "sample"){ savedView = false; answers = {...SAMPLE}; sample = true; contact = {}; sendStatus = ""; go(RESULTS); }
+  if(act === "sample"){ savedView = false; answers = {...(QUICK ? QUICK_SAMPLE : SAMPLE)}; sample = true; contact = {}; sendStatus = ""; go(RESULTS); }
   if(act === "pdf"){ try{ window.print(); }catch(e){} }
   if(act === "copylink"){
     const link = reportLink(), box = $("#linkbox"), lab = $("#copylabel");
@@ -593,7 +652,8 @@ async function sendToZoho(r, L){
   const desc = [
     `ROOFTOP SAFETY AUDIT: ${L.name.toUpperCase()} (risk index ${r.idx}/100)`,
     `Report link: ${reportLink()}`,
-    `${r.findings.length} hazard${r.findings.length === 1 ? "" : "s"} found${areas.length ? " in: " + areas.map(a => SECTIONS.find(s => s.id === a).title).join(", ") : ""}`,
+    `Tool: ${QUICK ? "60-second Quick Check" : "Full Rooftop Safety Audit"}`,
+    `${r.findings.length} hazard${r.findings.length === 1 ? "" : "s"} found${areas.length ? " in: " + areas.map(a => AREAS.find(s => s.id === a).title).join(", ") : ""}`,
     ...(r.unsure.length ? [`SITE VISIT OPPORTUNITY: ${r.unsure.length} answer${r.unsure.length === 1 ? "" : "s"} marked Not sure`] : []),
     "", "HAZARDS, MOST URGENT FIRST",
     ...r.findings.map(f => `- [${sevOf(f.pts)[1]}] ${f.t}. Fix: ${f.p[0]} (${f.ref})`),
@@ -628,13 +688,20 @@ window.addEventListener("load", postHeight);
 /* Report links: the answers ride in the link itself (one character per question), so a saved
    report reopens exactly as it was, with no personal details in the URL. */
 const ALLQ = SECTIONS.flatMap(s => s.qs);
+const QBYID = {}; ALLQ.forEach(q => QBYID[q.id] = q);
+/* Links already emailed before the counts and solar/steep questions were added used this order. */
+const LEGACY_V1 = ["access-frequency","ladder-gates","hatch-guards","chains","ladder-safety","skylights","skylight-protection","skylight-rating","skylight-load","skylight-bars","edge-distance","guardrails","fall-arrest","edge-frequency","warning-lines","obstacles","walkway","slip-resistant","pipe-crossings","crossovers","platform","high-visibility"];
+const LINK_TAG = QUICK ? "#q=1" : "#r=2";
 function reportLink(){
   const code = ALLQ.map(q => { const i = q.opts.findIndex(o => o[0] === answers[q.id]); return i < 0 ? "x" : String(i); }).join("");
-  return REPORT_BASE + "#r=1" + code;
+  return REPORT_BASE + LINK_TAG + code;
 }
 function readReportLink(){
-  const m = /^#r=1([0-9x]+)$/.exec(location.hash || ""); if(!m || m[1].length !== ALLQ.length) return false;
-  const a = {}; ALLQ.forEach((q, i) => { const c = m[1][i]; if(c !== "x" && q.opts[+c]) a[q.id] = q.opts[+c][0]; });
+  const m = /^#([rq])=([12])([0-9x]+)$/.exec(location.hash || ""); if(!m) return false;
+  const kind = m[1] + m[2], code = m[3];
+  const order = kind === "r1" && !QUICK ? LEGACY_V1 : (("#" + m[1] + "=" + m[2]) === LINK_TAG ? ALLQ.map(q => q.id) : null);
+  if(!order || code.length !== order.length) return false;
+  const a = {}; order.forEach((id, i) => { const q = QBYID[id], c = code[i]; if(q && c !== "x" && q.opts[+c]) a[id] = q.opts[+c][0]; });
   answers = a; savedView = true; step = RESULTS; return true;
 }
 readReportLink();
