@@ -206,8 +206,11 @@ const SUBMIT_URL = ""; // old keesafety-admin.com mailer; off, it refuses reques
 const SITE = "https://www.keesafety.com";
 const MODE = "full"; // "full" = Rooftop Safety Audit, "quick" = 60-second Quick Check. Both files are built from this one.
 const QUICK = MODE === "quick";
-const PAGES = "https://keesafetyinc.github.io/roof-top-safety-audit/";
-const REPORT_BASE = PAGES + (QUICK ? "rooftop-quick-check.html" : "rooftop-safety-audit.html"); // where emailed report links open
+// On a keesafety.com page the page itself supplies the title and intro, so the tool drops its own.
+const ON_SITE = window.self !== window.top && /(^|\.)keesafety\.com$/.test((() => { try{ return new URL((location.ancestorOrigins && location.ancestorOrigins[0]) || document.referrer).hostname; }catch(e){ return ""; } })());
+// Each version lives in its own GitHub repository; emailed report links open here
+const REPORT_BASE = QUICK ? "https://keesafetyinc.github.io/quick-check-form/rooftop-quick-check.html"
+                          : "https://keesafetyinc.github.io/roof-top-safety-audit/rooftop-safety-audit.html";
 const FULL_AUDIT_PAGE = "https://www.keesafety.com/services/interactive-rooftop-safety-audit-tool";
 const CAN_PRINT = /(^|\.)github\.io$|(^|\.)keesafety\.com$/.test(location.hostname); // print is blocked in previews
 
@@ -474,8 +477,8 @@ const arrow = `<i aria-hidden="true">→</i>`;
 
 function chrome(){
   const all = SECTIONS.flatMap(shown), done = all.filter(q => answers[q.id]).length;
-  return `<div class="head"><div><h1>${QUICK ? "Rooftop Safety Quick Check" : "Rooftop Safety Audit"}</h1>
-    <p>${QUICK ? "A few quick questions, about 60 seconds. See your roof's fall risk and what to fix first." : "Answer a few questions about your roof. We flag the fall hazards and show you how to fix each one."}</p></div>
+  return `<div class="head">${ON_SITE ? `<div></div>` : `<div><h1>${QUICK ? "Rooftop Safety Quick Check" : "Rooftop Safety Audit"}</h1>
+    <p>${QUICK ? "A few quick questions, about 60 seconds. See your roof's fall risk and what to fix first." : "Answer a few questions about your roof. We flag the fall hazards and show you how to fix each one."}</p></div>`}
     <button type="button" class="tlink" data-act="sample"><span>See a sample report</span>${arrow}</button></div>
   <div class="rule" role="progressbar" aria-valuemin="0" aria-valuemax="${all.length}" aria-valuenow="${done}" aria-label="Questions answered"><i style="width:${done / all.length * 100}%"></i></div>
   <p class="count">${done} of ${all.length} questions answered</p>
